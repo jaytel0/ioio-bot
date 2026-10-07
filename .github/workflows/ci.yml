@@ -1,4 +1,4 @@
-name: Verify BTB
+name: Verify ioio.bot
 on:
   push:
   pull_request:

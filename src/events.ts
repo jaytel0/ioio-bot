@@ -28,7 +28,7 @@ export class Events {
     const url = new URL(uri);
     // Exact operator-controlled hostname allowlist avoids arbitrary outbound fetches.
     // Never accept wildcard hosts, IP literals, userinfo, redirects, or custom ports.
-    requireThat(url.protocol === 'https:' && !url.username && !url.password && !url.hash && (!url.port || url.port === '443') && Boolean(this.hub.db.one('SELECT 1 FROM webhook_hosts WHERE host = ?', url.hostname)), 400, 'Callback hostname must be explicitly allowed by the BTB owner');
+    requireThat(url.protocol === 'https:' && !url.username && !url.password && !url.hash && (!url.port || url.port === '443') && Boolean(this.hub.db.one('SELECT 1 FROM webhook_hosts WHERE host = ?', url.hostname)), 400, 'Callback hostname must be explicitly allowed by the ioio.bot owner');
     return url;
   }
   private key(secret: string) {

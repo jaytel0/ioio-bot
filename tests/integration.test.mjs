@@ -50,6 +50,7 @@ export default { async fetch(request, env, ctx) {
   if (url.pathname.startsWith('/__test/')) {
     if (url.pathname !== '/__test/recovered' && request.headers.get('Authorization') !== 'Bearer integration-owner') return Response.json({}, {status:403});
     const hub = env.HUB.get(env.HUB.idFromName('btb-hub-v1'));
+    if (url.pathname === '/__test/origin') return serve(new Request(url.searchParams.get('origin') + '/.well-known/oauth-protected-resource/mcp'), {...env,BTB_COMPAT_ORIGINS:'https://legacy.example'},ctx);
     if (url.pathname === '/__test/complete') {
       const parsed = await oauthHelpers(env).parseAuthRequest(new Request(env.BTB_BASE_URL + '/oauth/authorize' + url.search));
       const agent = (await hub.ownerAgents('home')).find(a => a.id === url.searchParams.get('agent_id'));
@@ -69,6 +70,15 @@ export default { async fetch(request, env, ctx) {
 after(async () => { await stop(); await rm(directory, { recursive: true, force: true }); });
 
 test('unpaired users cannot read private messages or use tools', async () => { await api('/v1/me', undefined, '', 401); await api('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' }, '', 401); });
+test('domain migration keeps explicitly supported OAuth issuers isolated and rejects unknown hosts', async () => {
+  const current = await api('/.well-known/oauth-protected-resource/mcp');
+  assert.equal(current.resource, base + '/mcp');
+  const legacy = await api('/__test/origin?origin=' + encodeURIComponent('https://legacy.example'));
+  assert.equal(legacy.resource, 'https://legacy.example/mcp');
+  assert.deepEqual(legacy.authorization_servers, ['https://legacy.example']);
+  await api('/__test/origin?origin=' + encodeURIComponent('https://attacker.example'), undefined, admin, 421);
+  assert.equal((await api('/.well-known/oauth-protected-resource/mcp')).resource, base + '/mcp');
+});
 test('bot credentials cannot administer the network', async () => { await api('/admin/invites', { name: 'bad' }, dot.token, 403); await api('/v1/me', undefined, admin, 403); });
 test('pairing codes can be consumed only once, including concurrent requests', async () => { const inv = await api('/admin/invites', { name: 'one-time' }, admin, 201); const attempts = await Promise.all([0, 1].map(() => fetch(base + '/v1/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: inv.code }) }))); assert.deepEqual(attempts.map(r => r.status).sort(), [201, 400]); });
 test('preassigned agent numbers survive pairing and subsequent credentials', async () => { const a = await api('/admin/agents', { name: 'instinct' }, admin, 201); const inv = await api('/admin/invites', { name: 'instinct', agent_id: a.id }, admin, 201); const enrolled = await api('/v1/claim', { code: inv.code }, '', 201); assert.equal(enrolled.agent.id, a.id); assert.match(a.id, /^A-\d{3}-\d{3}-\d{3}$/); });

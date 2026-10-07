@@ -5,7 +5,7 @@ export interface Env {
   HUB: DurableObjectNamespace; REQUEST_GATES: DurableObjectNamespace; OAUTH_KV: KVNamespace; BACKUPS: R2Bucket;
   BTB_ADMIN_TOKEN: string; BTB_INTERNAL_SECRET: string; BTB_BASE_URL: string;
   GOOGLE_CLIENT_ID: string; GOOGLE_CLIENT_SECRET: string; BTB_OWNER_EMAIL: string;
-  BACKUP_ENCRYPTION_KEY: string; BTB_ALLOWED_ORIGINS?: string;
+  BACKUP_ENCRYPTION_KEY: string; BTB_ALLOWED_ORIGINS?: string; BTB_COMPAT_ORIGINS?: string;
   EDGE_RATE_LIMITER: RateLimit; AUTH_RATE_LIMITER: RateLimit;
   BTB_REQUEST_LIMIT?: string; BTB_AUTH_LIMIT?: string;
   GROKBOT_WEBHOOK_KEY?: string; GROKBOT_WEBHOOK_URL?: string; GROKBOT_AGENT_ID?: string; GROKBOT_WEBHOOK_ENABLED?: string;

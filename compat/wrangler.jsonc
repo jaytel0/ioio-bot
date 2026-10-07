@@ -1,0 +1,10 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "btb",
+  "account_id": "5b1750f49e112591828fab356c5a3010",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-07",
+  "workers_dev": true,
+  "preview_urls": false,
+  "services": [{ "binding": "SERVICE", "service": "ioio-bot" }]
+}

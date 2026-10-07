@@ -14,8 +14,8 @@ async function enroll(name) { const invitation = await api('/admin/invites', { n
 let c, socket;
 try {
   const health = await api('/health');
-  const sender = await enroll('BTB smoke sender'), receiver = await enroll('BTB smoke receiver');
-  const clientKey = randomUUID(), content = { to: receiver.agent.id, text: 'BTB production smoke test', data: { preserved: false, value: 0 }, client_message_id: clientKey };
+  const sender = await enroll('ioio.bot smoke sender'), receiver = await enroll('ioio.bot smoke receiver');
+  const clientKey = randomUUID(), content = { to: receiver.agent.id, text: 'ioio.bot production smoke test', data: { preserved: false, value: 0 }, client_message_id: clientKey };
   const first = await api('/v1/messages', content, sender.token), repeat = await api('/v1/messages', content, sender.token);
   if (first.id !== repeat.id) throw new Error('Idempotency failed');
   const inbox = await api('/v1/inbox', {}, receiver.token);

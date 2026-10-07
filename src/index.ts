@@ -8,7 +8,10 @@ export { BtbRequestGate } from './request-gate';
 export async function serve(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url), path = url.pathname;
   try {
-    requireThat(new URL(env.BTB_BASE_URL).origin === url.origin, 421, 'Use the canonical BTB address');
+    const serviceOrigins = new Set([new URL(env.BTB_BASE_URL).origin, ...(env.BTB_COMPAT_ORIGINS ?? '').split(',').filter(Boolean)]);
+    requireThat(serviceOrigins.has(url.origin), 421, 'Use the canonical ioio.bot address');
+    // Existing OAuth grants remain bound to their original issuer during the domain move.
+    if (url.origin !== env.BTB_BASE_URL) env = { ...env, BTB_BASE_URL: url.origin };
     const origin = request.headers.get('Origin'), allowed = new Set([env.BTB_BASE_URL, ...(env.BTB_ALLOWED_ORIGINS ?? '').split(',').filter(Boolean)]);
     requireThat(!origin || allowed.has(origin), 403, 'Origin not allowed');
     const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
@@ -43,7 +46,7 @@ export default {
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil((async () => {
       try { await createBackup(env); await oauthHelpers(env).purgeExpiredData({ batchSize: 20 }); }
-      catch { console.error(JSON.stringify({ event: 'backup_failure' })); throw new Error('BTB daily backup failed'); }
+      catch { console.error(JSON.stringify({ event: 'backup_failure' })); throw new Error('ioio.bot daily backup failed'); }
     })());
   }
 } satisfies ExportedHandler<Env>;

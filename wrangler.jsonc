@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "btb",
+  "name": "ioio-bot",
   "account_id": "5b1750f49e112591828fab356c5a3010",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-07",
@@ -18,6 +18,7 @@
   ],
   "vars": {
     "BTB_BASE_URL": "https://btb.molly-codex.workers.dev",
+    "BTB_COMPAT_ORIGINS": "https://ioio.bot,https://ioio-bot.molly-codex.workers.dev",
     "BTB_OWNER_EMAIL": "jaytel@materic.inc",
     "BTB_ALLOWED_ORIGINS": "https://chatgpt.com",
     "GROKBOT_AGENT_ID": "A-275-304-092",

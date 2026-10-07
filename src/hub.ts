@@ -80,7 +80,7 @@ export class BtbHub extends DurableObject<Env> {
     const digest = await hash(input.token), token = randomToken(), tokenHash = await hash(token);
     const agent = this.tx(() => {
       const link = this.db.one('SELECT * FROM setup_links WHERE hash = ?', digest);
-      requireThat(link && link.expires_at > Date.now() && link.remaining > 0, 400, 'Setup message expired; copy a new one from BTB');
+      requireThat(link && link.expires_at > Date.now() && link.remaining > 0, 400, 'Setup message expired; copy a new one from ioio.bot');
       const agent = this.createAgent(link.owner_id, input.name, input.capabilities);
       this.db.run("INSERT INTO tokens (hash, agent_id, owner_id, kind) VALUES (?, ?, ?, 'agent')", tokenHash, agent.id, agent.owner_id);
       this.db.run('UPDATE setup_links SET remaining = remaining - 1 WHERE hash = ?', digest);
@@ -140,9 +140,9 @@ export class BtbHub extends DurableObject<Env> {
     return this.db.all(`SELECT f.*, a.number, a.name FROM friendships f JOIN accounts a ON a.owner_id = CASE WHEN f.requester = ? THEN f.target ELSE f.requester END WHERE f.requester = ? OR f.target = ?`, ownerId, ownerId, ownerId).map(f => ({ id: f.id, number: f.number, name: f.name, status: f.status, incoming: f.target === ownerId }));
   }
   friendRequest(ownerId: string, number: string) {
-    requireThat(/^\d{4}-\d{4}$/.test(number), 400, 'Enter a BTB number');
+    requireThat(/^\d{4}-\d{4}$/.test(number), 400, 'Enter an ioio.bot number');
     const target = this.db.one('SELECT * FROM accounts WHERE number = ?', number);
-    requireThat(target && target.owner_id !== ownerId, 400, 'Choose another BTB number');
+    requireThat(target && target.owner_id !== ownerId, 400, 'Choose another ioio.bot number');
     this.account(ownerId);
     return this.tx(() => {
       const existing = this.db.one('SELECT * FROM friendships WHERE (requester = ? AND target = ?) OR (requester = ? AND target = ?)', ownerId, target.owner_id, target.owner_id, ownerId);
@@ -337,8 +337,8 @@ export class BtbHub extends DurableObject<Env> {
     const path = new URL(request.url).pathname;
     try {
       requireThat(path === '/admin/restore' || path === '/health' || this.db.one("SELECT value FROM recovery_state WHERE key = 'status'")?.value !== 'restoring', 503, 'Recovery in progress');
-      if (request.method === 'GET' && (path === '/' || path === '/health')) return json({ service: 'BTB', version: '0.1.0', status: 'ok', mcp: this.base(request) + '/mcp', docs: this.base(request) + '/docs', durable: true });
-      if (request.method === 'GET' && path === '/docs') return new Response('BTB is a headless agent network. Connect to /mcp with OAuth, or use a permanent agent Bearer credential.\nPair with POST /v1/claim {"code":"<8 digits>"}; send /v1/messages; read /v1/inbox; acknowledge /v1/ack; request consent /v1/connections.\nSource and setup: https://github.com/jaytel0/btb\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+      if (request.method === 'GET' && (path === '/' || path === '/health')) return json({ service: 'ioio.bot', version: '0.1.0', status: 'ok', mcp: this.base(request) + '/mcp', docs: this.base(request) + '/docs', durable: true });
+      if (request.method === 'GET' && path === '/docs') return new Response('ioio.bot is a headless agent network. Connect to /mcp with OAuth, or use a permanent agent Bearer credential.\nPair with POST /v1/claim {"code":"<8 digits>"}; send /v1/messages; read /v1/inbox; acknowledge /v1/ack; request consent /v1/connections.\nSource and setup: https://github.com/jaytel0/ioio-bot\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
       if (path.startsWith('/admin/')) return await this.admin(await this.auth(request, true), request, path);
       if (path === '/v1/join' && request.method === 'POST') { this.rate('join-global', 2000, 86400000); return json(await this.join(await body(request)), 201); }
       if (path === '/v1/claim' && request.method === 'POST') { this.rate('claim-global', 2000, 86400000); this.rate(`claim:${request.headers.get('CF-Connecting-IP') ?? 'local'}`, 10, 60000); return json(await this.claim(await body(request)), 201); }
@@ -370,7 +370,7 @@ export class BtbHub extends DurableObject<Env> {
     } catch (error) {
       if (error instanceof z.ZodError) return json({ error: 'Invalid input', details: error.issues }, 400);
       if (error instanceof ApiError) return json({ error: error.message }, error.status, error.status === 401 ? { 'WWW-Authenticate': `Bearer resource_metadata="${this.base(request)}/.well-known/oauth-protected-resource"` } : {});
-      console.error('BTB request failed', error instanceof Error ? error.name : 'unknown');
+      console.error('ioio.bot request failed', error instanceof Error ? error.name : 'unknown');
       return json({ error: 'Internal service error' }, 500);
     }
   }

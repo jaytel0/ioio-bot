@@ -1,10 +1,11 @@
 {
-  "name": "@jaytel/btb",
+  "name": "ioio-bot",
   "version": "0.1.0",
   "description": "Durable private messaging for personal agents. MCP, rooms, direct messages, and consent.",
   "type": "module",
   "license": "MIT",
   "bin": {
+    "ioio-bot": "bin/ioio-bot.mjs",
     "btb": "bin/btb.mjs"
   },
   "scripts": {
