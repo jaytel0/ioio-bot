@@ -1,6 +1,7 @@
 import { ApiError, hash, json, readLimitedText, requireThat, type Env } from './shared';
 import { oauthHelpers, oauthProvider } from './oauth';
 import { createBackup } from './recovery';
+import { assetResponse } from './assets';
 export { BtbHub } from './hub';
 export { BtbRequestGate } from './request-gate';
 
@@ -22,11 +23,12 @@ export async function serve(request: Request, env: Env, ctx: ExecutionContext): 
       const limit = path === '/admin/restore' ? 8 * 1024 * 1024 : path === '/oauth/token' ? 8192 : 32768;
       request = new Request(request, { body: await readLimitedText(request, limit) });
     }
-    const response = await oauthProvider(env).fetch(request, env, ctx);
+    const asset = assetResponse(request);
+    const response = asset ?? await oauthProvider(env).fetch(request, env, ctx);
     if (response.status === 101) return response;
     const headers = new Headers(response.headers);
     headers.set('X-Content-Type-Options', 'nosniff'); headers.set('Referrer-Policy', headers.get('Content-Type')?.includes('text/html') ? 'same-origin' : 'no-referrer');
-    headers.set('Cache-Control', 'no-store'); headers.set('Vary', 'Origin');
+    if (!asset) headers.set('Cache-Control', 'no-store'); headers.set('Vary', 'Origin');
     if (url.protocol === 'https:') headers.set('Strict-Transport-Security', 'max-age=31536000');
     if (origin) headers.set('Access-Control-Allow-Origin', origin);
     return new Response(response.body, { status: response.status, headers });

@@ -124,12 +124,8 @@ async function ownerPortal(request: Request, env: Env) {
   requireThat(request.method === 'GET', 405, 'Method not allowed');
   const response = await forward(new Request(env.BTB_BASE_URL + '/admin/state'), env, ownerPrincipal(session)); if (!response.ok) return response;
   const state = await response.json() as Row;
-  if (path === '/owner/add-friend') return page('Add friend', '<form method="post" action="/owner">' + csrf + '<label for="number">BTB number or link</label><div class="inline"><input id="number" name="number" required placeholder="1234-5678"><button name="action" value="friend-request">Connect all agents</button></div></form>');
-  if (path === '/owner/settings') {
-    const requests = state.connection_requests.filter((c: Row) => ['pending','accepted'].includes(c.status)).map((c: Row) => '<div class="row"><div>' + escape(c.requester) + '<p>' + escape(c.reason) + '</p></div><form method="post" action="/owner">' + csrf + '<input type="hidden" name="request_id" value="' + escape(c.id) + '">' + (c.status === 'pending' ? '<button name="action" value="accepted">Accept</button><button class="quiet" name="action" value="rejected">Decline</button>' : '<button class="quiet" name="action" value="revoked">Disconnect</button>') + '</form></div>').join('');
-    return page('Account', '<p>' + escape(session.email) + '</p>' + (requests ? '<h2>Agent requests</h2><div class="list">' + requests + '</div>' : '') + '<form method="post" action="/owner/logout">' + csrf + '<button class="secondary">Sign out</button></form><a href="/owner">Back</a>');
-  }
-  return dashboard(state, session.csrf, env.BTB_BASE_URL);
+  if (['/owner/add-friend', '/owner/settings'].includes(path)) return new Response(null, { status: 303, headers: { Location: '/owner' } });
+  return dashboard(state, session.csrf, env.BTB_BASE_URL, session.email);
 }
 async function friendPage(request: Request, env: Env, number: string) {
   const hub = env.HUB.get(env.HUB.idFromName('btb-hub-v1')) as any, account = await hub.publicAccount(number), session = await ownerSession(request, env);

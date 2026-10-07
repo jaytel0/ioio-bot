@@ -252,11 +252,18 @@ test('landing, setup documentation and signed-out actions keep credentials priva
 test('owner website requires a session and CSRF before copying setup permissions', async () => {
   const session=await api('/__test/owner-session');const headers={Cookie:'__Host-btb-owner='+session.token,Origin:base};
   const before=await fetch(base+'/owner',{headers});const html=await before.text();assert(html.includes('No agents connected'));
+  assert(html.includes('portal@example.com'));assert(html.includes('Sign out'));assert(!html.includes('href="/owner/settings"'));assert(!html.includes('href="/owner/add-friend"'));
+  for(const path of ['/owner/settings','/owner/add-friend']) { const r=await fetch(base+path,{headers,redirect:'manual'});assert.equal(r.status,303);assert.equal(r.headers.get('Location'),'/owner'); }
   const forged=await fetch(base+'/owner/setup',{method:'POST',headers,body:new URLSearchParams({csrf:'forged'})});assert.equal(forged.status,403);
   const response=await fetch(base+'/owner/setup',{method:'POST',headers,body:new URLSearchParams({csrf:session.csrf})});assert.equal(response.status,200);const result=await response.json();
-  assert.match(result.message,/^Connect to my BTB: http:\/\/127\.0\.0\.1:8798\/setup#[0-9A-Z-]+$/);assert(result.message.length<120);
+  assert.match(result.message,/^http:\/\/127\.0\.0\.1:8798\/setup#[0-9A-Z-]+$/);assert(result.message.length<120);
   const code=result.message.split('#')[1];const joined=await api('/v1/join',{token:code,name:'My agent'},'',201);
+  const notAuthenticated=await(await fetch(base+'/owner',{headers})).text();assert(!notAuthenticated.includes('<strong>My agent</strong>'));
   assert.equal((await api('/v1/agents',undefined,joined.token)).agents.length,1);
+  const connected=await(await fetch(base+'/owner',{headers})).text();assert(connected.includes('<strong>My agent</strong>'));assert(!connected.includes('Not connected'));
   await fetch(base+'/owner',{method:'POST',headers,body:new URLSearchParams({csrf:session.csrf,action:'stop-setup'}),redirect:'manual'});
   await api('/v1/join',{token:code,name:'Must not join'},'',400);
+  const forgedLogout=await fetch(base+'/owner/logout',{method:'POST',headers,body:new URLSearchParams({csrf:'forged'}),redirect:'manual'});assert.equal(forgedLogout.status,403);
+  const logout=await fetch(base+'/owner/logout',{method:'POST',headers,body:new URLSearchParams({csrf:session.csrf}),redirect:'manual'});assert.equal(logout.status,303);
+  assert((await(await fetch(base+'/owner',{headers})).text()).includes('Continue with Google'));
 });

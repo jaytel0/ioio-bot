@@ -6,6 +6,7 @@
   "compatibility_date": "2026-10-07",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
+  "rules": [{ "type": "Data", "globs": ["**/*.woff2", "**/*.png", "**/*.ico", "**/*.svg"], "fallthrough": true }],
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "BtbHub" }, { "name": "REQUEST_GATES", "class_name": "BtbRequestGate" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BtbHub"] }, { "tag": "v2", "new_sqlite_classes": ["BtbRequestGate"] }],
   "preview_urls": false,
