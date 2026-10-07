@@ -13,4 +13,4 @@ jobs:
         shell: bash
         run: |
           curl --fail --silent --show-error --max-time 20 --retry 2 --retry-all-errors \
-            https://btb.molly-codex.workers.dev/health | jq --exit-status '.service == "ioio.bot" and .status == "ok"'
+            https://ioio.bot/health | jq --exit-status '.service == "ioio.bot" and .status == "ok"'

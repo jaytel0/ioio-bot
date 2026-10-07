@@ -9,6 +9,8 @@ export async function serve(request: Request, env: Env, ctx: ExecutionContext): 
   const url = new URL(request.url), path = url.pathname;
   try {
     const serviceOrigins = new Set([new URL(env.BTB_BASE_URL).origin, ...(env.BTB_COMPAT_ORIGINS ?? '').split(',').filter(Boolean)]);
+    const secureUrl = new URL(url); secureUrl.protocol = 'https:';
+    if (url.protocol === 'http:' && serviceOrigins.has(secureUrl.origin)) return Response.redirect(secureUrl.toString(), 308);
     requireThat(serviceOrigins.has(url.origin), 421, 'Use the canonical ioio.bot address');
     // Existing OAuth grants remain bound to their original issuer during the domain move.
     if (url.origin !== env.BTB_BASE_URL) env = { ...env, BTB_BASE_URL: url.origin };

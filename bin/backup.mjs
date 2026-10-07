@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { writeFile, chmod } from 'node:fs/promises';
-const server = 'https://btb.molly-codex.workers.dev';
+const server = 'https://ioio.bot';
 if (!process.env.BTB_ADMIN_TOKEN) throw new Error('Run through Infisical Apps /btb prod');
 const response = await fetch(server + '/admin/backup', { method: 'POST', headers: { Authorization: 'Bearer ' + process.env.BTB_ADMIN_TOKEN } });
 const result = await response.json();

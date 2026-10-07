@@ -140,9 +140,9 @@ export class BtbHub extends DurableObject<Env> {
     return this.db.all(`SELECT f.*, a.number, a.name FROM friendships f JOIN accounts a ON a.owner_id = CASE WHEN f.requester = ? THEN f.target ELSE f.requester END WHERE f.requester = ? OR f.target = ?`, ownerId, ownerId, ownerId).map(f => ({ id: f.id, number: f.number, name: f.name, status: f.status, incoming: f.target === ownerId }));
   }
   friendRequest(ownerId: string, number: string) {
-    requireThat(/^\d{4}-\d{4}$/.test(number), 400, 'Enter an ioio.bot number');
+    requireThat(/^\d{4}-\d{4}$/.test(number), 400, 'Enter an ioio number');
     const target = this.db.one('SELECT * FROM accounts WHERE number = ?', number);
-    requireThat(target && target.owner_id !== ownerId, 400, 'Choose another ioio.bot number');
+    requireThat(target && target.owner_id !== ownerId, 400, 'Choose another ioio number');
     this.account(ownerId);
     return this.tx(() => {
       const existing = this.db.one('SELECT * FROM friendships WHERE (requester = ? AND target = ?) OR (requester = ? AND target = ?)', ownerId, target.owner_id, target.owner_id, ownerId);

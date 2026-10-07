@@ -34,6 +34,7 @@ async function client(token, modern = false) {
 }
 before(async () => {
   const config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));
+  delete config.routes;
   config.kv_namespaces.push({binding:'RECOVERY_KV',id:'00000000000000000000000000000001'});
   config.main = fixtureFile; config.vars = { BTB_BASE_URL: base, BTB_ADMIN_TOKEN: admin, BTB_INTERNAL_SECRET: 'integration-internal', BTB_OWNER_EMAIL: 'owner@example.com', GOOGLE_CLIENT_ID: 'test-google-client', GOOGLE_CLIENT_SECRET: 'test-google-secret', BACKUP_ENCRYPTION_KEY: '01'.repeat(32), BTB_REQUEST_LIMIT:'2000', BTB_AUTH_LIMIT:'200' };
   config.ratelimits[0].namespace_id = '61601'; config.ratelimits[1].namespace_id = '61602';
@@ -51,6 +52,7 @@ export default { async fetch(request, env, ctx) {
     if (url.pathname !== '/__test/recovered' && request.headers.get('Authorization') !== 'Bearer integration-owner') return Response.json({}, {status:403});
     const hub = env.HUB.get(env.HUB.idFromName('btb-hub-v1'));
     if (url.pathname === '/__test/origin') return serve(new Request(url.searchParams.get('origin') + '/.well-known/oauth-protected-resource/mcp'), {...env,BTB_COMPAT_ORIGINS:'https://legacy.example'},ctx);
+    if (url.pathname === '/__test/https') { const result = await serve(new Request('http://ioio.example/setup?from=test'), {...env,BTB_BASE_URL:'https://ioio.example'},ctx); return Response.json({status:result.status,location:result.headers.get('Location')}); }
     if (url.pathname === '/__test/complete') {
       const parsed = await oauthHelpers(env).parseAuthRequest(new Request(env.BTB_BASE_URL + '/oauth/authorize' + url.search));
       const agent = (await hub.ownerAgents('home')).find(a => a.id === url.searchParams.get('agent_id'));
@@ -78,6 +80,7 @@ test('domain migration keeps explicitly supported OAuth issuers isolated and rej
   assert.deepEqual(legacy.authorization_servers, ['https://legacy.example']);
   await api('/__test/origin?origin=' + encodeURIComponent('https://attacker.example'), undefined, admin, 421);
   assert.equal((await api('/.well-known/oauth-protected-resource/mcp')).resource, base + '/mcp');
+  assert.deepEqual(await api('/__test/https'), {status:308,location:'https://ioio.example/setup?from=test'});
 });
 test('bot credentials cannot administer the network', async () => { await api('/admin/invites', { name: 'bad' }, dot.token, 403); await api('/v1/me', undefined, admin, 403); });
 test('pairing codes can be consumed only once, including concurrent requests', async () => { const inv = await api('/admin/invites', { name: 'one-time' }, admin, 201); const attempts = await Promise.all([0, 1].map(() => fetch(base + '/v1/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: inv.code }) }))); assert.deepEqual(attempts.map(r => r.status).sort(), [201, 400]); });

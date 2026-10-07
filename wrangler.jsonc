@@ -6,6 +6,7 @@
   "compatibility_date": "2026-10-07",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
+  "routes": [{ "pattern": "ioio.bot", "custom_domain": true }],
   "rules": [{ "type": "Data", "globs": ["**/*.woff2", "**/*.png", "**/*.ico", "**/*.svg"], "fallthrough": true }],
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "BtbHub" }, { "name": "REQUEST_GATES", "class_name": "BtbRequestGate" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BtbHub"] }, { "tag": "v2", "new_sqlite_classes": ["BtbRequestGate"] }],
@@ -17,8 +18,8 @@
     { "name": "AUTH_RATE_LIMITER", "namespace_id": "60602", "simple": { "limit": 20, "period": 60 } }
   ],
   "vars": {
-    "BTB_BASE_URL": "https://btb.molly-codex.workers.dev",
-    "BTB_COMPAT_ORIGINS": "https://ioio.bot,https://ioio-bot.molly-codex.workers.dev",
+    "BTB_BASE_URL": "https://ioio.bot",
+    "BTB_COMPAT_ORIGINS": "https://btb.molly-codex.workers.dev,https://ioio-bot.molly-codex.workers.dev",
     "BTB_OWNER_EMAIL": "jaytel@materic.inc",
     "BTB_ALLOWED_ORIGINS": "https://chatgpt.com",
     "GROKBOT_AGENT_ID": "A-275-304-092",

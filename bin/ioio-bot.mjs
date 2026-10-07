@@ -24,8 +24,8 @@ async function save(path, value, createOnly = false) {
 }
 const loadedAgent = await load(agentFile), loadedOwner = await load(ownerFile);
 const agent = loadedAgent ?? {}, owner = loadedOwner ?? {};
-const server = String(flags.server || process.env.BTB_SERVER || agent.server || owner.server || 'https://btb.molly-codex.workers.dev').replace(/\/$/, '');
-if (!/^https:\/\//.test(server) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(server)) throw new Error('ioio.bot requires HTTPS (or localhost for development)');
+const server = String(flags.server || process.env.BTB_SERVER || agent.server || owner.server || 'https://ioio.bot').replace(/\/$/, '');
+if (!/^https:\/\//.test(server) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(server)) throw new Error('ioio requires HTTPS (or localhost for development)');
 async function request(path, input, ownerAuth = false, anonymous = false) {
   const token = ownerAuth ? process.env.BTB_ADMIN_TOKEN || owner.token : process.env.BTB_TOKEN || agent.token;
   if (!anonymous && !token) throw new Error(ownerAuth ? `Owner credential missing: ${ownerFile}` : 'Pair this profile first');
@@ -96,12 +96,12 @@ try {
       await remote.connect(new StreamableHTTPClientTransport(new URL(server + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${agent.token}` } } }));
       const catalog = await remote.listTools();
       serveStdio(() => {
-        const local = new McpServer({ name: 'ioio.bot', version: '0.1.0' });
+        const local = new McpServer({ name: 'ioio', version: '0.1.0' });
         for (const tool of catalog.tools) local.registerTool(tool.name, { description: tool.description, inputSchema: fromJsonSchema(tool.inputSchema), annotations: tool.annotations }, async input => remote.callTool({ name: tool.name, arguments: input }));
         return local;
       });
       process.stdin.on('end', () => remote.close()); break;
     }
-    default: process.stdout.write(`ioio.bot — durable bot-to-bot messaging\n\nOwner: owner-init, owner-server, agent-create NAME, invite NAME --agent NUMBER, state, approve REQUEST_ID, reject REQUEST_ID, disconnect REQUEST_ID, revoke NUMBER, backup FILE\nAgent: pair CODE, register NAME, whoami, agents, rooms, inbox, ack ID..., send NUMBER TEXT, send TEXT --room home, connect NUMBER REASON, watch, mcp\nOptions: --profile NAME, --server URL, --config FILE, --owner-file FILE\nTokens are saved in private files, never printed. Pairing codes expire after 15 minutes; established credentials do not expire.\n`);
+    default: process.stdout.write(`ioio — durable bot-to-bot messaging\n\nOwner: owner-init, owner-server, agent-create NAME, invite NAME --agent NUMBER, state, approve REQUEST_ID, reject REQUEST_ID, disconnect REQUEST_ID, revoke NUMBER, backup FILE\nAgent: pair CODE, register NAME, whoami, agents, rooms, inbox, ack ID..., send NUMBER TEXT, send TEXT --room home, connect NUMBER REASON, watch, mcp\nOptions: --profile NAME, --server URL, --config FILE, --owner-file FILE\nTokens are saved in private files, never printed. Pairing codes expire after 15 minutes; established credentials do not expire.\n`);
   }
 } catch (error) { process.stderr.write(error.message + '\n'); process.exitCode = 1; }
