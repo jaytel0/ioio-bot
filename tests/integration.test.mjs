@@ -70,6 +70,23 @@ test('unpaired users cannot read private messages or use tools', async () => { a
 test('bot credentials cannot administer the network', async () => { await api('/admin/invites', { name: 'bad' }, dot.token, 403); await api('/v1/me', undefined, admin, 403); });
 test('pairing codes can be consumed only once, including concurrent requests', async () => { const inv = await api('/admin/invites', { name: 'one-time' }, admin, 201); const attempts = await Promise.all([0, 1].map(() => fetch(base + '/v1/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: inv.code }) }))); assert.deepEqual(attempts.map(r => r.status).sort(), [201, 400]); });
 test('preassigned agent numbers survive pairing and subsequent credentials', async () => { const a = await api('/admin/agents', { name: 'instinct' }, admin, 201); const inv = await api('/admin/invites', { name: 'instinct', agent_id: a.id }, admin, 201); const enrolled = await api('/v1/claim', { code: inv.code }, '', 201); assert.equal(enrolled.agent.id, a.id); assert.match(a.id, /^A-\d{3}-\d{3}-\d{3}$/); });
+test('temporary enrollment expires across REST and MCP while preserving the agent number', async () => {
+  const a = await api('/admin/agents', { name: 'temporary-instinct' }, admin, 201);
+  for (const credential_ttl_seconds of [0, -1, 86401, 1.5]) await api('/admin/invites', { name: a.name, agent_id: a.id, credential_ttl_seconds }, admin, 400);
+  const inv = await api('/admin/invites', { name: a.name, agent_id: a.id, credential_ttl_seconds: 1 }, admin, 201);
+  assert.equal(inv.credential_expires, true);
+  const enrollment = await api('/v1/claim', { code: inv.code }, '', 201);
+  assert.equal(enrollment.agent.id, a.id);
+  assert(Date.parse(enrollment.expires_at) > Date.now());
+  assert.equal((await api('/v1/me', undefined, enrollment.token)).id, a.id);
+  await new Promise(resolve => setTimeout(resolve, Math.max(0, Date.parse(enrollment.expires_at) - Date.now()) + 50));
+  await api('/v1/inbox', {}, enrollment.token, 401);
+  await api('/mcp', { jsonrpc:'2.0', id:1, method:'tools/list' }, enrollment.token, 401);
+  const another = await api('/admin/invites', { name:a.name, agent_id:a.id, credential_ttl_seconds:3600 }, admin, 201);
+  const renewed = await api('/v1/claim', { code:another.code }, '', 201);
+  assert.equal(renewed.agent.id, a.id);
+  assert.equal((await api('/v1/me', undefined, renewed.token)).id, a.id);
+});
 test('agent tokens stored only as hashes', async () => { const backup = await api('/admin/export'); assert(!JSON.stringify(backup).includes(dot.token)); assert(!JSON.stringify(backup).includes(guest.owner_token)); });
 test('guests cannot discover private agents or rooms', async () => { const list = await api('/v1/agents', undefined, guest.token); assert.deepEqual(list.agents.map(a => a.id), [guest.agent.id]); assert.deepEqual((await api('/v1/rooms', undefined, guest.token)).rooms, []); });
 test('direct messages preserve structured values exactly and stay private', async () => { sent = await api('/v1/messages', { to: grok.agent.id, data: { slots: ['2026-10-08T18:00:00-04:00'], cost: 0, available: false }, client_message_id: 'direct-once' }, dot.token, 201); const inbox = await api('/v1/inbox', {}, grok.token); assert.deepEqual(inbox.messages[0].data, { slots: ['2026-10-08T18:00:00-04:00'], cost: 0, available: false }); assert.equal((await api('/v1/inbox', {}, muse.token)).messages.length, 0); });
@@ -145,12 +162,17 @@ test('forged internal identities, unknown browser origins, and oversized bodies 
   await api('/admin/export',undefined,dot.token,403);await api('/admin/export',undefined,guest.owner_token,403);
 });
 test('encrypted backup round-trips and restores identity and inbox into an empty isolated network',async()=>{
+  const legacyInvite=await api('/admin/invites',{name:'legacy pending enrollment'},admin,201);
   for(let i=0;i<16;i++) await api('/oauth/register',{redirect_uris:['http://127.0.0.1:9876/callback'],token_endpoint_auth_method:'none'},'',201);
   const backup=await api('/admin/backup',{});assert.equal(backup.verified,true);
   const encrypted=await api('/admin/backup/download?key='+encodeURIComponent(backup.key));assert.equal(encrypted.format,'btb-encrypted-v1');assert(!JSON.stringify(encrypted).includes(sent.text));
   const moduleFile=join(directory,'recovery.mjs');await build({entryPoints:['src/recovery.ts'],outfile:moduleFile,bundle:true,platform:'node',format:'esm'});
   const {openBackup}=await import(moduleFile),snapshot=await openBackup(encrypted,'01'.repeat(32));assert(snapshot.oauth.some(x=>x.key.startsWith('client:')));
+  // An older snapshot has no optional temporary-key field; restore it with the
+  // original permanent enrollment semantics, without relaxing other columns.
+  for (const invite of snapshot.tables.invites) delete invite.credential_ttl_seconds;
   let response=await api('/__test/restore',snapshot);while(!response.restored) response=await api('/__test/restore',snapshot);assert.equal(response.restored,true);
+  const legacyEnrollment=await api('/__test/recovered?path=/v1/claim',{code:legacyInvite.code},'',201);assert.equal(legacyEnrollment.expires_at,null);
   const me=await api('/__test/recovered?path=/v1/me',undefined,dot.token);assert.equal(me.id,dot.agent.id);
   const inbox=await api('/__test/recovered?path=/v1/inbox',{include_acked:true},grok.token);assert(inbox.messages.some(x=>x.id===sent.id));
   assert.equal((await api('/__test/restore',snapshot)).restored,true);

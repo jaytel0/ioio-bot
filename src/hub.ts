@@ -16,6 +16,7 @@ export class BtbHub extends DurableObject<Env> {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
   get storage() { return this.ctx.storage; }
+  get grokRoutine() { return this.env.GROKBOT_WEBHOOK_ENABLED === 'true' && this.env.GROKBOT_WEBHOOK_KEY && this.env.GROKBOT_WEBHOOK_URL && this.env.GROKBOT_AGENT_ID ? { agentId: this.env.GROKBOT_AGENT_ID, url: this.env.GROKBOT_WEBHOOK_URL, key: this.env.GROKBOT_WEBHOOK_KEY } : undefined; }
   background(promise: Promise<unknown>) { this.ctx.waitUntil(promise); }
   base(request: Request) { return this.env.BTB_BASE_URL || new URL(request.url).origin; }
   tx<T>(fn: () => T) { return this.storage.transactionSync(fn); }
@@ -185,26 +186,27 @@ export class BtbHub extends DurableObject<Env> {
     let code: string, digest: string;
     do { code = randomCode(); digest = await hash(code); } while (this.db.one('SELECT 1 FROM invites WHERE hash = ?', digest));
     const expires = Date.now() + 15 * 60000;
-    this.db.run('INSERT INTO invites VALUES (?, ?, ?, ?, ?, ?)', digest, owner.owner_id, input.name, JSON.stringify(input.capabilities), input.agent_id ?? null, expires);
-    return { code, expires_at: new Date(expires).toISOString(), credential_expires: false };
+    this.db.run('INSERT INTO invites (hash, owner_id, name, capabilities, agent_id, expires_at, credential_ttl_seconds) VALUES (?, ?, ?, ?, ?, ?, ?)', digest, owner.owner_id, input.name, JSON.stringify(input.capabilities), input.agent_id ?? null, expires, input.credential_ttl_seconds ?? null);
+    return { code, expires_at: new Date(expires).toISOString(), credential_expires: Boolean(input.credential_ttl_seconds), credential_ttl_seconds: input.credential_ttl_seconds ?? null };
   }
   async claim(value: unknown) {
     const { code } = z.object({ code: z.string().regex(/^\d{8}$/) }).strict().parse(value);
     const digest = await hash(code), token = randomToken(), tokenHash = await hash(token);
-    const agent = this.tx(() => {
+    const result = this.tx(() => {
       const invite = this.db.one('SELECT * FROM invites WHERE hash = ?', digest);
       requireThat(invite && invite.expires_at > Date.now(), 400, 'Invalid, consumed, or expired pairing code');
       const a = invite.agent_id ? this.agent(invite.agent_id) : this.createAgent(invite.owner_id, invite.name, JSON.parse(invite.capabilities));
       requireThat(!a.revoked, 403, 'Agent revoked');
-      this.db.run('INSERT INTO tokens (hash, agent_id, owner_id, kind) VALUES (?, ?, ?, ?)', tokenHash, a.id, a.owner_id, 'agent');
+      const expiresAt = invite.credential_ttl_seconds ? Date.now() + invite.credential_ttl_seconds * 1000 : null;
+      this.db.run('INSERT INTO tokens (hash, agent_id, owner_id, kind, expires_at) VALUES (?, ?, ?, ?, ?)', tokenHash, a.id, a.owner_id, 'agent', expiresAt);
       this.db.run('DELETE FROM invites WHERE hash = ?', digest);
-      return a;
+      return { agent: a, expiresAt };
     });
-    return { agent: this.profile(agent), token, expires_at: null };
+    return { agent: this.profile(result.agent), token, expires_at: result.expiresAt ? new Date(result.expiresAt).toISOString() : null };
   }
   async admin(owner: Row, request: Request, path: string) {
     const input = request.method === 'GET' ? {} : path === '/admin/restore' ? JSON.parse(await readLimitedText(request, 8 * 1024 * 1024)) : await body(request);
-    if (path === '/admin/agents' && request.method === 'POST') { const v = inviteSchema.omit({ agent_id: true }).parse(input); return json(this.profile(this.tx(() => this.createAgent(owner.owner_id, v.name, v.capabilities))), 201); }
+    if (path === '/admin/agents' && request.method === 'POST') { const v = inviteSchema.omit({ agent_id: true, credential_ttl_seconds: true }).parse(input); return json(this.profile(this.tx(() => this.createAgent(owner.owner_id, v.name, v.capabilities))), 201); }
     if (path === '/admin/invites' && request.method === 'POST') return json(await this.mintInvite(owner, input), 201);
     if (path === '/admin/connections/decide' && request.method === 'POST') {
       const v = z.object({ request_id: z.string().uuid(), decision: z.enum(['accepted', 'rejected', 'revoked']) }).strict().parse(input);
@@ -263,14 +265,14 @@ export class BtbHub extends DurableObject<Env> {
       if (path === '/v1/claim' && request.method === 'POST') { this.rate('claim-global', 2000, 86400000); this.rate(`claim:${request.headers.get('CF-Connecting-IP') ?? 'local'}`, 10, 60000); return json(await this.claim(await body(request)), 201); }
       if (path === '/v1/register' && request.method === 'POST') {
         this.rate('register-global', 50, 86400000); this.rate(`register:${request.headers.get('CF-Connecting-IP') ?? 'local'}`, 5, 86400000);
-        const input = inviteSchema.omit({ agent_id: true }).parse(await body(request));
+        const input = inviteSchema.omit({ agent_id: true, credential_ttl_seconds: true }).parse(await body(request));
         const ownerId = crypto.randomUUID(), token = randomToken(), ownerToken = randomToken('btb_owner_');
         const tokenHash = await hash(token), ownerHash = await hash(ownerToken);
         const agent = this.tx(() => { const a = this.createAgent(ownerId, input.name, input.capabilities); this.db.run("INSERT INTO tokens (hash, agent_id, owner_id, kind) VALUES (?, ?, ?, 'agent'), (?, NULL, ?, 'owner')", tokenHash, a.id, ownerId, ownerHash, ownerId); return a; });
         return json({ agent: this.profile(agent), token, owner_token: ownerToken, expires_at: null }, 201);
       }
       const principal = await this.auth(request);
-      if (path === '/mcp') return await mcp(this, principal, request);
+      if (path === '/mcp') { this.events.bindGrokRoutine(principal); return await mcp(this, principal, request); }
       if (request.method === 'GET' && path === '/v1/me') return json(this.profile(this.agent(principal.agent_id)));
       if (request.method === 'GET' && path === '/v1/agents') return json({ agents: this.db.all('SELECT DISTINCT a.* FROM agents a WHERE a.revoked = 0 AND (a.owner_id = ? OR EXISTS (SELECT 1 FROM connections c WHERE c.status = ? AND ((c.requester = a.id AND c.target = ?) OR (c.target = a.id AND c.requester = ?))))', principal.owner_id, 'accepted', principal.agent_id, principal.agent_id).map(a => this.profile(a)) });
       if (request.method === 'GET' && path === '/v1/rooms') return json({ rooms: this.db.all('SELECT r.id, r.name FROM rooms r JOIN members m ON r.id = m.room_id WHERE m.agent_id = ?', principal.agent_id) });

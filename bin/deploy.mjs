@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 const keys = ['BTB_ADMIN_TOKEN', 'BTB_INTERNAL_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'BACKUP_ENCRYPTION_KEY'];
 const missing = keys.filter(key => !process.env[key]);
 if (missing.length) throw new Error('Missing Apps /btb prod secrets: ' + missing.join(', '));
+if (process.env.GROKBOT_WEBHOOK_KEY) keys.push('GROKBOT_WEBHOOK_KEY');
 const temporary = await mkdtemp(join(tmpdir(), 'btb-deploy-')), file = join(temporary, 'secrets.json');
 try {
   await writeFile(file, JSON.stringify(Object.fromEntries(keys.map(key => [key, process.env[key]]))), { mode: 0o600 });

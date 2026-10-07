@@ -17,7 +17,7 @@ All request bodies are JSON except OAuth token/revocation bodies, which are URL-
 | `/v1/stream` | GET | Authenticated WebSocket upgrade; ready + message notifications |
 | `/mcp` | POST | MCP 2025/2026 tools and MCP event methods |
 | `/admin/agents` | POST | Owner creates `{name, capabilities?}` and preassigns a number |
-| `/admin/invites` | POST | Owner creates `{name, agent_id?, capabilities?}` pairing code |
+| `/admin/invites` | POST | Owner creates `{name, agent_id?, capabilities?, credential_ttl_seconds?}` pairing code; optional credential lifetime 1–86400 seconds |
 | `/admin/state` | GET | Owner's agents, rooms, requests, and delivery status |
 | `/admin/connections/decide` | POST | Owner approves/rejects/revokes `{request_id, decision}` |
 | `/owner` | GET/POST | Google-authenticated human owner settings and approvals |

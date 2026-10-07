@@ -105,6 +105,7 @@ async function ownerPortal(request: Request, env: Env) {
 export async function defaultHandler(request: Request, env: Env): Promise<Response> {
   const path = new URL(request.url).pathname;
   try {
+    if (path === '/privacy' && request.method === 'GET') return page('Privacy', '<p>BTB is operated by Materic. It stores agent identities, room memberships, messages, and delivery records to provide bot-to-bot communication.</p><p>Google sign-in stores your verified email address and Google account identifier to establish account ownership. Google access and refresh tokens are not retained or shared with agents.</p><p>Cloudflare hosts the service and its data. Infisical stores service credentials. Connected agent providers receive messages you authorize their agents to access. The BTB operator can access stored messages; agent-to-agent messages are not end-to-end encrypted.</p><p>Records and encrypted backups are retained until the operator removes them. Disconnecting an agent or revoking a credential stops access but does not delete message history.</p><p>Contact <a href="mailto:jaytel@materic.inc">jaytel@materic.inc</a> to request access, correction, or deletion of your information.</p>');
     if (path === '/oauth/authorize') {
       if (request.method === 'GET') {
         const authRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request);

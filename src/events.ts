@@ -11,6 +11,19 @@ const subscriptionSchema = z.object({
 export class Events {
   private flushing?: Promise<void>;
   constructor(private hub: BtbHub) {}
+  private routineURL(value: string) {
+    const url = new URL(value);
+    requireThat(url.protocol === 'https:' && url.hostname === 'api2.cursor.sh' && !url.port && !url.username && !url.password && !url.search && !url.hash && /^\/automations\/webhook\/[a-f0-9-]{36}$/.test(url.pathname), 503, 'Invalid Grok routine configuration');
+    return value;
+  }
+  bindGrokRoutine(principal: Row) {
+    const routine = this.hub.grokRoutine;
+    // Only the operator-configured agent's authenticated OAuth grant can bind this
+    // provider adapter. Clients cannot supply destinations or provider secrets.
+    if (!routine || principal.kind !== 'oauth' || !principal.family || principal.agent_id !== routine.agentId || principal.owner_id !== 'home') return;
+    this.routineURL(routine.url);
+    this.hub.db.run("INSERT INTO subscriptions (id,agent_id,callback_url,grant_family,secret,directed_only,expires_at) VALUES ('grok_routine',?,?,?,'',1,NULL) ON CONFLICT(id) DO UPDATE SET callback_url=excluded.callback_url,grant_family=excluded.grant_family", routine.agentId, routine.url, principal.family);
+  }
   private validateCallback(uri: string) {
     const url = new URL(uri);
     // Exact operator-controlled hostname allowlist avoids arbitrary outbound fetches.
@@ -31,6 +44,12 @@ export class Events {
     return 'v1,' + btoa(String.fromCharCode(...signature));
   }
   private async post(subscription: Row, eventId: string, value: Row) {
+    if (subscription.id === 'grok_routine') {
+      const routine = this.hub.grokRoutine;
+      requireThat(routine && routine.agentId === subscription.agent_id && routine.url === subscription.callback_url, 503, 'Grok routine disabled');
+      this.routineURL(routine.url);
+      return fetch(routine.url, { method:'POST', redirect:'error', signal:AbortSignal.timeout(10000), headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+routine.key, 'Idempotency-Key':eventId }, body:JSON.stringify(value) });
+    }
     this.validateCallback(subscription.callback_url);
     const text = JSON.stringify(value), timestamp = String(Math.floor(Date.now() / 1000));
     let signature = await this.signature(subscription.secret, eventId, timestamp, text);
@@ -79,7 +98,7 @@ export class Events {
     for (const item of pending) {
       const sub = this.hub.db.one('SELECT * FROM subscriptions WHERE id = ?', item.subscription_id);
       const grantValid = !sub?.grant_family || await this.hub.grantActive(sub.grant_family);
-      if (!sub || !grantValid || this.hub.agent(sub.agent_id).revoked || (sub.expires_at && sub.expires_at <= Date.now())) { this.hub.db.run("UPDATE outbox SET status = 'stopped' WHERE id = ?", item.id); continue; }
+      if (!sub || !grantValid || this.hub.agent(sub.agent_id).revoked || (sub.id === 'grok_routine' && !this.hub.grokRoutine) || (sub.expires_at && sub.expires_at <= Date.now())) { this.hub.db.run("UPDATE outbox SET status = 'stopped' WHERE id = ?", item.id); continue; }
       const message = this.hub.db.one('SELECT kind, created_at FROM messages WHERE seq = ?', item.seq)!;
       let status = 0;
       try { status = (await this.post(sub, item.id, { eventId: item.id, name: eventName, timestamp: message.created_at, data: { agent_id: sub.agent_id, message_id: item.seq, kind: message.kind }, cursor: null })).status; } catch { /* Durable retry below. No message or credentials enter logs. */ }

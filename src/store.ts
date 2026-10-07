@@ -8,7 +8,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS recovery_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS agents_owner ON agents(owner_id);
       CREATE TABLE IF NOT EXISTS tokens (hash TEXT PRIMARY KEY, agent_id TEXT, owner_id TEXT NOT NULL, kind TEXT NOT NULL, expires_at INTEGER, client_id TEXT, resource TEXT, family TEXT, used INTEGER NOT NULL DEFAULT 0);
-      CREATE TABLE IF NOT EXISTS invites (hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, capabilities TEXT NOT NULL, agent_id TEXT, expires_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS invites (hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, capabilities TEXT NOT NULL, agent_id TEXT, expires_at INTEGER NOT NULL, credential_ttl_seconds INTEGER);
       CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS members (room_id TEXT NOT NULL, agent_id TEXT NOT NULL, PRIMARY KEY(room_id, agent_id));
       CREATE INDEX IF NOT EXISTS members_agent ON members(agent_id, room_id);
@@ -28,6 +28,7 @@ export class Store {
       CREATE INDEX IF NOT EXISTS outbox_pending ON outbox(status, next_at);
       CREATE TABLE IF NOT EXISTS webhook_hosts (host TEXT PRIMARY KEY);
     `);
+    if (!sql.exec('PRAGMA table_info(invites)').toArray().some(column => column.name === 'credential_ttl_seconds')) sql.exec('ALTER TABLE invites ADD COLUMN credential_ttl_seconds INTEGER');
     sql.exec("INSERT OR IGNORE INTO rooms VALUES ('home', 'home', 'My agents')");
     sql.exec("INSERT OR IGNORE INTO webhook_hosts VALUES ('chatgpt.com'), ('api.openai.com')");
   }
@@ -44,7 +45,9 @@ export class Store {
     for (const table of allowed) {
       const columns = this.all(`PRAGMA table_info(${table})`).map(row => row.name as string);
       this.run(`DELETE FROM ${table}`);
-      for (const row of tables[table]) {
+      for (const original of tables[table]) {
+        // Backups made before expiring enrollment preserve their permanent-key default.
+        const row = table === 'invites' && !Object.hasOwn(original, 'credential_ttl_seconds') ? { ...original, credential_ttl_seconds: null } : original;
         const keys = Object.keys(row);
         if (keys.length !== columns.length || keys.some(key => !columns.includes(key))) throw new Error('Invalid backup row');
         this.run(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, ...keys.map(key => row[key]));

@@ -42,11 +42,11 @@ try {
     }
     case 'owner-server': { if (!owner.token) throw new Error('Initialize owner first'); await save(ownerFile, { ...owner, server }); print({ server, saved: ownerFile }); break; }
     case 'agent-create': print(await request('/admin/agents', { name: positional[0], capabilities: (flags.capabilities || '').split(',').filter(Boolean) }, true)); break;
-    case 'invite': print(await request('/admin/invites', { name: positional[0], ...(flags.agent ? { agent_id: flags.agent } : {}), capabilities: (flags.capabilities || '').split(',').filter(Boolean) }, true)); break;
+    case 'invite': print(await request('/admin/invites', { name: positional[0], ...(flags.agent ? { agent_id: flags.agent } : {}), ...(flags['credential-ttl-seconds'] ? { credential_ttl_seconds: Number(flags['credential-ttl-seconds']) } : {}), capabilities: (flags.capabilities || '').split(',').filter(Boolean) }, true)); break;
     case 'pair': {
       if (loadedAgent !== null) throw new Error('Profile already exists; credential and number were preserved. Choose a new --profile.');
       const result = await request('/v1/claim', { code: positional[0] }, false, true);
-      await save(agentFile, { server, token: result.token, agent: result.agent }, true); print({ agent: result.agent, saved: agentFile, expires: false }); break;
+      await save(agentFile, { server, token: result.token, agent: result.agent, expires_at: result.expires_at }, true); print({ agent: result.agent, saved: agentFile, expires: result.expires_at ?? false }); break;
     }
     case 'register': {
       if (loadedAgent !== null) throw new Error('Profile already exists; credential and number were preserved. Choose a new --profile.');

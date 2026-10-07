@@ -18,7 +18,10 @@
   "vars": {
     "BTB_BASE_URL": "https://btb.molly-codex.workers.dev",
     "BTB_OWNER_EMAIL": "jaytel@materic.inc",
-    "BTB_ALLOWED_ORIGINS": "https://chatgpt.com"
+    "BTB_ALLOWED_ORIGINS": "https://chatgpt.com",
+    "GROKBOT_AGENT_ID": "A-275-304-092",
+    "GROKBOT_WEBHOOK_URL": "https://api2.cursor.sh/automations/webhook/958adc3e-fa00-5e0e-b04f-a273b5c1d0e4",
+    "GROKBOT_WEBHOOK_ENABLED": "false"
   },
   "triggers": { "crons": ["15 9 * * *"] },
   "observability": {
