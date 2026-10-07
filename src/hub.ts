@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
 import { Store } from './store';
-import { ApiError, bearer, body, readLimitedText, canonical, equal, hash, idSchema, inviteSchema, json, now, randomCode, randomToken, requireThat, sendSchema, type Env, type Row } from './shared';
+import { ApiError, bearer, body, readLimitedText, canonical, equal, hash, idSchema, inviteSchema, json, now, randomCode, randomToken, setupCode, requireThat, sendSchema, type Env, type Row } from './shared';
 import { oauthHelpers } from './oauth';
 import { mcp } from './mcp';
 import { Events } from './events';
@@ -35,6 +35,7 @@ export class BtbHub extends DurableObject<Env> {
       if (owner) requireThat(principal.kind === 'owner', 403, 'Human owner required');
       else { const agent = this.agent(principal.agent_id); requireThat(!agent.revoked && agent.owner_id === principal.owner_id && principal.kind === 'oauth', 403, 'Agent unavailable'); }
       this.rate(`internal:${principal.owner_id}:${principal.agent_id ?? 'owner'}`);
+      if (!owner) this.touch(principal.agent_id);
       return principal;
     }
     const token = bearer(request);
@@ -47,7 +48,45 @@ export class BtbHub extends DurableObject<Env> {
     if (owner) requireThat(row.kind === 'owner', 403, 'This action requires the human owner’s credential');
     else requireThat(row.kind !== 'owner', 403, 'Use an agent credential for agent tools');
     this.rate(`auth:${row.hash}`);
+    if (row.agent_id) this.touch(row.agent_id);
     return row;
+  }
+  touch(agentId: string) { this.db.run('INSERT OR REPLACE INTO agent_activity VALUES (?, ?)', agentId, now()); }
+  account(ownerId: string, name?: string) {
+    let account = this.db.one('SELECT * FROM accounts WHERE owner_id = ?', ownerId);
+    if (!account) {
+      name = name ?? String(this.db.one('SELECT email FROM google_owners WHERE owner_id = ?', ownerId)?.email.split('@')[0] ?? 'BTB member');
+      let number: string;
+      do { const digits = randomCode(); number = digits.slice(0, 4) + '-' + digits.slice(4); } while (this.db.one('SELECT 1 FROM accounts WHERE number = ?', number));
+      this.db.run('INSERT INTO accounts VALUES (?, ?, ?)', ownerId, number, name);
+      account = { owner_id: ownerId, number, name };
+    }
+    if (account.name === 'BTB member') {
+      const email = this.db.one('SELECT email FROM google_owners WHERE owner_id = ?', ownerId)?.email;
+      if (email) { account.name = String(email).split('@')[0]; this.db.run('UPDATE accounts SET name = ? WHERE owner_id = ?', account.name, ownerId); }
+    }
+    return account;
+  }
+  publicAccount(number: string) {
+    return this.db.one('SELECT number, name FROM accounts WHERE number = ?', number) ?? null;
+  }
+  async setupLink(ownerId: string) {
+    const token = setupCode(), digest = await hash(token), expires = Date.now() + 3600000;
+    this.tx(() => { this.db.run('DELETE FROM setup_links WHERE owner_id = ?', ownerId); this.db.run('INSERT INTO setup_links VALUES (?, ?, ?, 10)', digest, ownerId, expires); });
+    return { token, expires_at: new Date(expires).toISOString() };
+  }
+  async join(value: unknown) {
+    const input = z.object({ token: z.string().trim().transform(v => v.startsWith('setup_') ? v : v.toUpperCase()).pipe(z.string().regex(/^(?:setup_[a-f0-9]{64}|[0-9A-HJKMNP-TV-Z]{4}(?:-[0-9A-HJKMNP-TV-Z]{4}){2})$/)), name: z.string().trim().min(1).max(60), capabilities: z.array(z.string().max(120)).max(30).default([]) }).strict().parse(value);
+    const digest = await hash(input.token), token = randomToken(), tokenHash = await hash(token);
+    const agent = this.tx(() => {
+      const link = this.db.one('SELECT * FROM setup_links WHERE hash = ?', digest);
+      requireThat(link && link.expires_at > Date.now() && link.remaining > 0, 400, 'Setup message expired; copy a new one from BTB');
+      const agent = this.createAgent(link.owner_id, input.name, input.capabilities);
+      this.db.run("INSERT INTO tokens (hash, agent_id, owner_id, kind) VALUES (?, ?, ?, 'agent')", tokenHash, agent.id, agent.owner_id);
+      this.db.run('UPDATE setup_links SET remaining = remaining - 1 WHERE hash = ?', digest);
+      return agent;
+    });
+    return { agent: this.profile(agent), token, expires_at: null, server: this.env.BTB_BASE_URL, mcp: this.env.BTB_BASE_URL + '/mcp' };
   }
   agent(id: string): Row { const agent = this.db.one('SELECT * FROM agents WHERE id = ?', id); requireThat(agent, 404, 'Agent not found'); return agent; }
   profile(agent: Row) { return { id: agent.id, name: agent.name, capabilities: JSON.parse(agent.capabilities), created_at: agent.created_at }; }
@@ -60,8 +99,8 @@ export class BtbHub extends DurableObject<Env> {
         requireThat(!this.db.one('SELECT 1 FROM google_owners WHERE owner_id = ?', owner_id), 403, 'Owner identity already bound');
         this.db.run('INSERT INTO google_owners VALUES (?, ?, ?)', subject, owner_id, email);
         owner = { subject, owner_id, email };
-        if (owner_id !== 'home') this.createAgent(owner_id, email.split('@')[0] + ' agent');
       }
+      this.account(owner.owner_id, email.split('@')[0]);
       return owner;
     });
   }
@@ -94,7 +133,39 @@ export class BtbHub extends DurableObject<Env> {
   }
   owns(owner: Row, agentId: string) { requireThat(this.agent(agentId).owner_id === owner.owner_id, 403, 'Agent belongs to another owner'); }
   linked(a: string, b: string) {
-    return a === b || this.agent(a).owner_id === this.agent(b).owner_id || Boolean(this.db.one("SELECT 1 FROM connections WHERE status = 'accepted' AND ((requester = ? AND target = ?) OR (requester = ? AND target = ?))", a, b, b, a));
+    const ownerA = this.agent(a).owner_id, ownerB = this.agent(b).owner_id;
+    return a === b || ownerA === ownerB || Boolean(this.db.one("SELECT 1 FROM friendships WHERE status = 'accepted' AND ((requester = ? AND target = ?) OR (requester = ? AND target = ?))", ownerA, ownerB, ownerB, ownerA)) || Boolean(this.db.one("SELECT 1 FROM connections WHERE status = 'accepted' AND ((requester = ? AND target = ?) OR (requester = ? AND target = ?))", a, b, b, a));
+  }
+  friends(ownerId: string) {
+    return this.db.all(`SELECT f.*, a.number, a.name FROM friendships f JOIN accounts a ON a.owner_id = CASE WHEN f.requester = ? THEN f.target ELSE f.requester END WHERE f.requester = ? OR f.target = ?`, ownerId, ownerId, ownerId).map(f => ({ id: f.id, number: f.number, name: f.name, status: f.status, incoming: f.target === ownerId }));
+  }
+  friendRequest(ownerId: string, number: string) {
+    requireThat(/^\d{4}-\d{4}$/.test(number), 400, 'Enter a BTB number');
+    const target = this.db.one('SELECT * FROM accounts WHERE number = ?', number);
+    requireThat(target && target.owner_id !== ownerId, 400, 'Choose another BTB number');
+    this.account(ownerId);
+    return this.tx(() => {
+      const existing = this.db.one('SELECT * FROM friendships WHERE (requester = ? AND target = ?) OR (requester = ? AND target = ?)', ownerId, target.owner_id, target.owner_id, ownerId);
+      if (existing && ['pending', 'accepted'].includes(existing.status)) return existing;
+      this.rate('friend:' + ownerId, 10, 86400000);
+      const id = existing?.id ?? crypto.randomUUID();
+      if (existing) this.db.run("UPDATE friendships SET requester = ?, target = ?, status = 'pending', created_at = ? WHERE id = ?", ownerId, target.owner_id, now(), id);
+      else this.db.run("INSERT INTO friendships VALUES (?, ?, ?, 'pending', ?)", id, ownerId, target.owner_id, now());
+      return { id, status: 'pending' };
+    });
+  }
+  decideFriend(ownerId: string, id: string, decision: string) {
+    requireThat(['accepted', 'rejected', 'revoked'].includes(decision), 400, 'Invalid decision');
+    const f = this.db.one('SELECT * FROM friendships WHERE id = ?', id);
+    requireThat(f, 404, 'Connection not found');
+    requireThat(decision === 'revoked' ? [f.requester, f.target].includes(ownerId) : f.target === ownerId, 403, 'Connection belongs to another account');
+    requireThat(decision === 'revoked' || f.status === 'pending', 409, 'Request is no longer pending');
+    this.db.run('UPDATE friendships SET status = ? WHERE id = ?', decision, id);
+    return { id, status: decision };
+  }
+  visibleAgents(agentId: string) {
+    const ownerId = this.agent(agentId).owner_id;
+    return this.db.all(`SELECT a.* FROM agents a WHERE a.revoked = 0 AND (a.owner_id = ? OR EXISTS (SELECT 1 FROM connections c WHERE c.status = 'accepted' AND ((c.requester = a.id AND c.target = ?) OR (c.target = a.id AND c.requester = ?))) OR EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND ((f.requester = ? AND f.target = a.owner_id) OR (f.target = ? AND f.requester = a.owner_id))))`, ownerId, agentId, agentId, ownerId, ownerId).map(a => ({ ...this.profile(a), account: this.db.one('SELECT number, name FROM accounts WHERE owner_id = ?', a.owner_id) ?? null }));
   }
   member(room: string, agentId: string) { return Boolean(this.db.one('SELECT 1 FROM members WHERE room_id = ? AND agent_id = ?', room, agentId)); }
   message(row: Row) { return { id: row.seq, from: row.sender, to: row.target, room: row.room_id, text: row.text, data: row.data === null ? null : JSON.parse(row.data), kind: row.kind, thread_id: row.thread_id, reply_to: row.reply_to, mentions: JSON.parse(row.mentions), hop_count: row.hop_count, created_at: row.created_at }; }
@@ -206,6 +277,10 @@ export class BtbHub extends DurableObject<Env> {
   }
   async admin(owner: Row, request: Request, path: string) {
     const input = request.method === 'GET' ? {} : path === '/admin/restore' ? JSON.parse(await readLimitedText(request, 8 * 1024 * 1024)) : await body(request);
+    if (path === '/admin/friends' && request.method === 'POST') { const v = z.object({ number: z.string() }).strict().parse(input); return json(this.friendRequest(owner.owner_id, v.number), 201); }
+    if (path === '/admin/friends/decide' && request.method === 'POST') { const v = z.object({ id: z.string().uuid(), decision: z.enum(['accepted', 'rejected', 'revoked']) }).strict().parse(input); return json(this.decideFriend(owner.owner_id, v.id, v.decision)); }
+    if (path === '/admin/setup' && request.method === 'POST') return json(await this.setupLink(owner.owner_id), 201);
+    if (path === '/admin/setup/revoke' && request.method === 'POST') { this.db.run('DELETE FROM setup_links WHERE owner_id = ?', owner.owner_id); return json({ revoked: true }); }
     if (path === '/admin/agents' && request.method === 'POST') { const v = inviteSchema.omit({ agent_id: true, credential_ttl_seconds: true }).parse(input); return json(this.profile(this.tx(() => this.createAgent(owner.owner_id, v.name, v.capabilities))), 201); }
     if (path === '/admin/invites' && request.method === 'POST') return json(await this.mintInvite(owner, input), 201);
     if (path === '/admin/connections/decide' && request.method === 'POST') {
@@ -230,7 +305,10 @@ export class BtbHub extends DurableObject<Env> {
       this.db.run('INSERT OR IGNORE INTO webhook_hosts VALUES (?)', host); return json({ allowed_host: host });
     }
     if (path === '/admin/state' && request.method === 'GET') return json({
-      agents: this.db.all('SELECT * FROM agents WHERE owner_id = ?', owner.owner_id).map(a => ({ ...this.profile(a), revoked: Boolean(a.revoked), credentials: this.db.one("SELECT COUNT(*) AS n FROM tokens WHERE agent_id = ? AND kind != 'refresh'", a.id)!.n })),
+      account: this.account(owner.owner_id),
+      friends: this.friends(owner.owner_id),
+      setup_active: Boolean(this.db.one('SELECT 1 FROM setup_links WHERE owner_id = ? AND expires_at > ? AND remaining > 0', owner.owner_id, Date.now())),
+      agents: this.db.all('SELECT * FROM agents WHERE owner_id = ?', owner.owner_id).map(a => ({ last_seen: this.db.one('SELECT last_seen FROM agent_activity WHERE agent_id = ?', a.id)?.last_seen ?? null, ...this.profile(a), revoked: Boolean(a.revoked), credentials: this.db.one("SELECT COUNT(*) AS n FROM tokens WHERE agent_id = ? AND kind != 'refresh'", a.id)!.n })),
       rooms: this.db.all('SELECT * FROM rooms WHERE owner_id = ?', owner.owner_id),
       connection_requests: this.db.all('SELECT c.* FROM connections c JOIN agents a ON a.id = c.target WHERE a.owner_id = ?', owner.owner_id),
       pending_oauth: [],
@@ -262,6 +340,7 @@ export class BtbHub extends DurableObject<Env> {
       if (request.method === 'GET' && (path === '/' || path === '/health')) return json({ service: 'BTB', version: '0.1.0', status: 'ok', mcp: this.base(request) + '/mcp', docs: this.base(request) + '/docs', durable: true });
       if (request.method === 'GET' && path === '/docs') return new Response('BTB is a headless agent network. Connect to /mcp with OAuth, or use a permanent agent Bearer credential.\nPair with POST /v1/claim {"code":"<8 digits>"}; send /v1/messages; read /v1/inbox; acknowledge /v1/ack; request consent /v1/connections.\nSource and setup: https://github.com/jaytel0/btb\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
       if (path.startsWith('/admin/')) return await this.admin(await this.auth(request, true), request, path);
+      if (path === '/v1/join' && request.method === 'POST') { this.rate('join-global', 2000, 86400000); return json(await this.join(await body(request)), 201); }
       if (path === '/v1/claim' && request.method === 'POST') { this.rate('claim-global', 2000, 86400000); this.rate(`claim:${request.headers.get('CF-Connecting-IP') ?? 'local'}`, 10, 60000); return json(await this.claim(await body(request)), 201); }
       if (path === '/v1/register' && request.method === 'POST') {
         this.rate('register-global', 50, 86400000); this.rate(`register:${request.headers.get('CF-Connecting-IP') ?? 'local'}`, 5, 86400000);
@@ -274,7 +353,7 @@ export class BtbHub extends DurableObject<Env> {
       const principal = await this.auth(request);
       if (path === '/mcp') { this.events.bindGrokRoutine(principal); return await mcp(this, principal, request); }
       if (request.method === 'GET' && path === '/v1/me') return json(this.profile(this.agent(principal.agent_id)));
-      if (request.method === 'GET' && path === '/v1/agents') return json({ agents: this.db.all('SELECT DISTINCT a.* FROM agents a WHERE a.revoked = 0 AND (a.owner_id = ? OR EXISTS (SELECT 1 FROM connections c WHERE c.status = ? AND ((c.requester = a.id AND c.target = ?) OR (c.target = a.id AND c.requester = ?))))', principal.owner_id, 'accepted', principal.agent_id, principal.agent_id).map(a => this.profile(a)) });
+      if (request.method === 'GET' && path === '/v1/agents') return json({ agents: this.visibleAgents(principal.agent_id) });
       if (request.method === 'GET' && path === '/v1/rooms') return json({ rooms: this.db.all('SELECT r.id, r.name FROM rooms r JOIN members m ON r.id = m.room_id WHERE m.agent_id = ?', principal.agent_id) });
       if (request.method === 'POST' && path === '/v1/messages') return json(await this.send(principal.agent_id, await body(request)), 201);
       if (request.method === 'POST' && path === '/v1/inbox') return json(this.inbox(principal.agent_id, await body(request)));
@@ -295,7 +374,7 @@ export class BtbHub extends DurableObject<Env> {
       return json({ error: 'Internal service error' }, 500);
     }
   }
-  async alarm() { this.db.run('DELETE FROM limits WHERE reset_at < ?', Date.now()); this.db.run('DELETE FROM invites WHERE expires_at < ?', Date.now()); await this.events.flush(); }
+  async alarm() { this.db.run('DELETE FROM limits WHERE reset_at < ?', Date.now()); this.db.run('DELETE FROM invites WHERE expires_at < ?', Date.now()); this.db.run('DELETE FROM setup_links WHERE expires_at < ?', Date.now()); await this.events.flush(); }
   webSocketMessage(socket: WebSocket, message: string | ArrayBuffer) { if (message === 'ping') socket.send('pong'); else socket.send(JSON.stringify({ type: 'error', error: 'Use MCP or REST to send; this stream delivers notifications.' })); }
   webSocketClose(socket: WebSocket) { socket.close(); }
   webSocketError(socket: WebSocket) { socket.close(); }

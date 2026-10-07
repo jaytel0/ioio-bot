@@ -12,7 +12,7 @@ export async function serve(request: Request, env: Env, ctx: ExecutionContext): 
     requireThat(!origin || allowed.has(origin), 403, 'Origin not allowed');
     const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
     requireThat((await env.EDGE_RATE_LIMITER.limit({ key: ip })).success, 429, 'Too many requests');
-    const sensitive = /^\/(oauth|owner)(\/|$)/.test(path) || path === '/v1/claim' || path === '/v1/register';
+    const sensitive = /^\/(oauth|owner)(\/|$)/.test(path) || path === '/v1/join' || path === '/v1/claim' || path === '/v1/register';
     if (sensitive) requireThat((await env.AUTH_RATE_LIMITER.limit({ key: ip })).success, 429, 'Too many authentication requests');
     const gate = env.REQUEST_GATES.get(env.REQUEST_GATES.idFromName(await hash(env.BTB_INTERNAL_SECRET + ':' + ip))) as any;
     requireThat((await gate.consume(sensitive, { requests: Number(env.BTB_REQUEST_LIMIT ?? 120), auth: Number(env.BTB_AUTH_LIMIT ?? 20) })).success, 429, 'Too many requests');
@@ -25,7 +25,7 @@ export async function serve(request: Request, env: Env, ctx: ExecutionContext): 
     const response = await oauthProvider(env).fetch(request, env, ctx);
     if (response.status === 101) return response;
     const headers = new Headers(response.headers);
-    headers.set('X-Content-Type-Options', 'nosniff'); headers.set('Referrer-Policy', 'no-referrer');
+    headers.set('X-Content-Type-Options', 'nosniff'); headers.set('Referrer-Policy', headers.get('Content-Type')?.includes('text/html') ? 'same-origin' : 'no-referrer');
     headers.set('Cache-Control', 'no-store'); headers.set('Vary', 'Origin');
     if (url.protocol === 'https:') headers.set('Strict-Transport-Security', 'max-age=31536000');
     if (origin) headers.set('Access-Control-Allow-Origin', origin);

@@ -4,6 +4,10 @@ export class Store {
   constructor(private sql: SqlStorage) {
     sql.exec(`
       CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, name TEXT NOT NULL, owner_id TEXT NOT NULL, capabilities TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS accounts (owner_id TEXT PRIMARY KEY, number TEXT NOT NULL UNIQUE, name TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS setup_links (hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL, expires_at INTEGER NOT NULL, remaining INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS agent_activity (agent_id TEXT PRIMARY KEY, last_seen TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS friendships (id TEXT PRIMARY KEY, requester TEXT NOT NULL, target TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(requester, target));
       CREATE TABLE IF NOT EXISTS google_owners (subject TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE, email TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS recovery_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS agents_owner ON agents(owner_id);
@@ -36,11 +40,12 @@ export class Store {
   one(query: string, ...values: SqlStorageValue[]): Row | undefined { return this.all(query, ...values)[0]; }
   run(query: string, ...values: SqlStorageValue[]) { this.sql.exec(query, ...values); }
   export() {
-    const tables = ['agents', 'google_owners', 'tokens', 'invites', 'rooms', 'members', 'connections', 'messages', 'deliveries', 'subscriptions', 'outbox', 'webhook_hosts'];
+    const tables = ['accounts', 'setup_links', 'agent_activity', 'friendships', 'agents', 'google_owners', 'tokens', 'invites', 'rooms', 'members', 'connections', 'messages', 'deliveries', 'subscriptions', 'outbox', 'webhook_hosts'];
     return Object.fromEntries(tables.map(table => [table, this.all(`SELECT * FROM ${table}`)]));
   }
   restore(tables: Record<string, Row[]>) {
     const allowed = Object.keys(this.export());
+    tables = { accounts: [], setup_links: [], agent_activity: [], friendships: [], ...tables };
     if (Object.keys(tables).some(table => !allowed.includes(table)) || allowed.some(table => !Array.isArray(tables[table]))) throw new Error('Invalid backup tables');
     for (const table of allowed) {
       const columns = this.all(`PRAGMA table_info(${table})`).map(row => row.name as string);

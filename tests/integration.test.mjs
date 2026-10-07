@@ -43,6 +43,7 @@ before(async () => {
 import application, { BtbHub, BtbRequestGate, serve } from '${process.cwd()}/src/index';
 import { oauthHelpers } from '${process.cwd()}/src/oauth';
 import { restoreBackup } from '${process.cwd()}/src/recovery';
+import { hash } from '${process.cwd()}/src/shared';
 export { BtbHub, BtbRequestGate };
 export default { async fetch(request, env, ctx) {
   const url = new URL(request.url);
@@ -55,6 +56,7 @@ export default { async fetch(request, env, ctx) {
       if (!agent) return Response.json({}, {status:403});
       return Response.json(await oauthHelpers(env).completeAuthorization({request:parsed,userId:'fixture-user',scope:['btb'],metadata:{agent_id:agent.id},props:{agent_id:agent.id,owner_id:'home',userId:'fixture-user'},revokeExistingGrants:false}));
     }
+    if (url.pathname === '/__test/owner-session') { const owner=await hub.googleOwner('portal-fixture','portal@example.com');const token=crypto.randomUUID(),csrf=crypto.randomUUID();await env.OAUTH_KV.put('owner-session:'+await hash(token),JSON.stringify({...owner,csrf,expires_at:Date.now()+60000}));return Response.json({token,csrf}); }
     if (url.pathname === '/__test/google-owner') { const input = await request.json(); return Response.json(await hub.googleOwner(input.subject,input.email)); }
     if (url.pathname === '/__test/strict-gate') { const gate=env.REQUEST_GATES.get(env.REQUEST_GATES.idFromName('strict-fixture')); return Response.json(await Promise.all([gate.consume(true,{requests:2,auth:2}),gate.consume(true,{requests:2,auth:2}),gate.consume(true,{requests:2,auth:2})])); }
     if (url.pathname === '/__test/edge-deny') return serve(new Request(env.BTB_BASE_URL+'/v1/me'), {...env,EDGE_RATE_LIMITER:{limit:async()=>({success:false})},HUB:{get:()=>{throw new Error('Database reached')}}},ctx);
@@ -127,9 +129,14 @@ test('maintained OAuth enforces PKCE, audience, consent cookies, refresh and rev
   const consent = await fetch(base + '/oauth/authorize?' + q); assert.equal(consent.status, 200);
   const html = await consent.text(); assert(!html.includes('<script>bad</script>')); assert(html.includes('&#60;script&#62;'));
   assert(consent.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
+  assert.equal(consent.headers.get('referrer-policy'),'same-origin');
+  assert(consent.headers.get('content-security-policy').includes('https://accounts.google.com'));
+  assert(consent.headers.get('content-security-policy').includes('http://127.0.0.1:9876'));
+  assert(!consent.headers.get('content-security-policy').includes('*'));
   const handle = html.match(/name="handle" value="([^"]+)"/)[1];
   const unbound = await fetch(base+'/oauth/authorize',{method:'POST',body:new URLSearchParams({handle,decision:'allow'}),redirect:'manual'}); assert.equal(unbound.status,400);
   const cookies = consent.headers.getSetCookie().map(x=>x.split(';')[0]).join('; ');
+  const opaqueOrigin=await fetch(base+'/oauth/authorize',{method:'POST',headers:{Cookie:cookies,Origin:'null'},body:new URLSearchParams({handle,decision:'allow'}),redirect:'manual'});assert.equal(opaqueOrigin.status,403);
   const denied = await fetch(base+'/oauth/authorize',{method:'POST',headers:{Cookie:cookies},body:new URLSearchParams({handle,decision:'deny'}),redirect:'manual'}); assert.equal(denied.status,302); assert(new URL(denied.headers.get('location')).searchParams.get('error')==='access_denied');
   const replay = await fetch(base+'/oauth/authorize',{method:'POST',headers:{Cookie:cookies},body:new URLSearchParams({handle,decision:'allow'}),redirect:'manual'}); assert.equal(replay.status,400);
   const completed = await api('/__test/complete?'+q+'&agent_id='+dot.agent.id);
@@ -171,6 +178,7 @@ test('encrypted backup round-trips and restores identity and inbox into an empty
   // An older snapshot has no optional temporary-key field; restore it with the
   // original permanent enrollment semantics, without relaxing other columns.
   for (const invite of snapshot.tables.invites) delete invite.credential_ttl_seconds;
+  for (const table of ['accounts','setup_links','agent_activity','friendships']) delete snapshot.tables[table];
   let response=await api('/__test/restore',snapshot);while(!response.restored) response=await api('/__test/restore',snapshot);assert.equal(response.restored,true);
   const legacyEnrollment=await api('/__test/recovered?path=/v1/claim',{code:legacyInvite.code},'',201);assert.equal(legacyEnrollment.expires_at,null);
   const me=await api('/__test/recovered?path=/v1/me',undefined,dot.token);assert.equal(me.id,dot.agent.id);
@@ -191,3 +199,64 @@ test('CLI pairing stores private credentials and its stdio bridge serves real MC
 });
 
 test('persistent request gate enforces concurrent limits before message storage',async()=>{const results=await api('/__test/strict-gate');assert.equal(results.filter(x=>x.success).length,2);assert.equal(results.filter(x=>!x.success).length,1);});
+
+test('one setup message enrolls distinct agents, expires on replacement, and cannot administer', async () => {
+  const link = await api('/admin/setup', {}, admin, 201);
+  assert.match(link.token,/^[0-9A-HJKMNP-TV-Z]{4}(?:-[0-9A-HJKMNP-TV-Z]{4}){2}$/);
+  const a = await api('/v1/join', { token:link.token, name:'setup-one' }, '', 201);
+  const b = await api('/v1/join', { token:link.token.toLowerCase(), name:'setup-two' }, '', 201);
+  assert.notEqual(a.agent.id,b.agent.id); assert.notEqual(a.token,b.token);
+  assert.equal((await api('/v1/me',undefined,a.token)).id,a.agent.id);
+  await api('/admin/setup',{},a.token,403);
+  await api('/v1/me',undefined,link.token,401);
+  const backup=await api('/admin/export'); assert(!JSON.stringify(backup).includes(link.token)); assert(!JSON.stringify(backup).includes(a.token));
+  const replacement=await api('/admin/setup',{},admin,201);
+  await api('/v1/join',{token:link.token,name:'old-message'},'',400);
+  await api('/admin/setup/revoke',{});
+  await api('/v1/join',{token:replacement.token,name:'revoked-message'},'',400);
+  assert.equal((await api('/v1/me',undefined,a.token)).id,a.agent.id);
+  await api('/admin/revoke',{agent_id:a.agent.id});await api('/v1/me',undefined,a.token,401);
+});
+test('setup messages enforce a ten-agent cap under concurrent enrollment', async () => {
+  const link=await api('/admin/setup',{},admin,201);
+  const outcomes=await Promise.all(Array.from({length:11},(_,i)=>fetch(base+'/v1/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:link.token,name:'batch-'+i})})));
+  assert.equal(outcomes.filter(r=>r.status===201).length,10);assert.equal(outcomes.filter(r=>r.status===400).length,1);
+});
+test('personal numbers survive requests; friends require target approval and never reveal rooms or inboxes', async () => {
+  const home=await api('/admin/state'), other=await api('/admin/state',undefined,guest.owner_token);
+  assert.equal((await api('/admin/state')).account.number,home.account.number);
+  assert.match(home.account.number,/^\d{4}-\d{4}$/);
+  const publicProfile=await fetch(base+'/'+home.account.number);assert.equal(publicProfile.status,200);assert(!(await publicProfile.text()).includes('owner@example.com'));
+  const request=await api('/admin/friends',{number:home.account.number},guest.owner_token,201);
+  await api('/admin/friends/decide',{id:request.id,decision:'accepted'},guest.owner_token,403);
+  await api('/admin/friends/decide',{id:request.id,decision:'accepted'},guest.token,403);
+  assert(!(await api('/v1/agents',undefined,guest.token)).agents.some(a=>a.id===muse.agent.id));
+  await api('/admin/friends/decide',{id:request.id,decision:'accepted'});
+  assert((await api('/v1/agents',undefined,guest.token)).agents.some(a=>a.id===muse.agent.id));
+  const m=await api('/v1/messages',{to:muse.agent.id,text:'friend delivery',client_message_id:randomUUID()},guest.token,201);
+  assert((await api('/v1/inbox',{},muse.token)).messages.some(x=>x.id===m.id));
+  assert(!(await api('/v1/inbox',{},dot.token)).messages.some(x=>x.id===m.id));
+  await api('/v1/messages',{room:'home',text:'private room',client_message_id:randomUUID()},guest.token,403);
+  await api('/admin/friends/decide',{id:request.id,decision:'revoked'},guest.owner_token);
+  await api('/v1/messages',{to:muse.agent.id,text:'revoked',client_message_id:randomUUID()},guest.token,403);
+  assert(!(await api('/v1/agents',undefined,guest.token)).agents.some(a=>a.id===muse.agent.id));
+  assert.equal(other.account.number,(await api('/admin/state',undefined,guest.owner_token)).account.number);
+});
+test('landing, setup documentation and signed-out actions keep credentials private', async () => {
+  const r=await fetch(base+'/');const html=await r.text();assert(html.includes('Continue with Google'));assert(html.includes('Your agents,'));assert(!html.includes('setup_'));
+  assert(r.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
+  const setup=await fetch(base+'/owner/setup',{method:'POST',body:new URLSearchParams({csrf:'invalid'})});assert.equal(setup.status,401);
+  const docs=await fetch(base+'/setup');assert.equal(docs.status,200);assert((await docs.text()).includes('does not wake your model'));
+});
+
+test('owner website requires a session and CSRF before copying setup permissions', async () => {
+  const session=await api('/__test/owner-session');const headers={Cookie:'__Host-btb-owner='+session.token,Origin:base};
+  const before=await fetch(base+'/owner',{headers});const html=await before.text();assert(html.includes('No agents connected'));
+  const forged=await fetch(base+'/owner/setup',{method:'POST',headers,body:new URLSearchParams({csrf:'forged'})});assert.equal(forged.status,403);
+  const response=await fetch(base+'/owner/setup',{method:'POST',headers,body:new URLSearchParams({csrf:session.csrf})});assert.equal(response.status,200);const result=await response.json();
+  assert.match(result.message,/^Connect to my BTB: http:\/\/127\.0\.0\.1:8798\/setup#[0-9A-Z-]+$/);assert(result.message.length<120);
+  const code=result.message.split('#')[1];const joined=await api('/v1/join',{token:code,name:'My agent'},'',201);
+  assert.equal((await api('/v1/agents',undefined,joined.token)).agents.length,1);
+  await fetch(base+'/owner',{method:'POST',headers,body:new URLSearchParams({csrf:session.csrf,action:'stop-setup'}),redirect:'manual'});
+  await api('/v1/join',{token:code,name:'Must not join'},'',400);
+});
