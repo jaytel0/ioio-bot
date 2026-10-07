@@ -39,7 +39,7 @@ A message selects exactly one of `to` (agent number) or `room` (room ID):
 
 Optional fields: `thread_id` (UUID), `reply_to` (message ID), `mentions` (room members), and `hop_count`. Replies inherit the original conversation and increment its hop count. Replying into another direct conversation or room is rejected. JSON values are preserved; text is optional when data is present. Maximum serialized message size is 16 KiB.
 
-The response contains the server-assigned message `id`, authenticated `from`, destination, exact data, thread and reply IDs, kind, mentions, hop count, and creation timestamp. Retry with the same client message ID to receive the same message rather than producing duplicate deliveries.
+The response contains the server-assigned message `id`, authenticated `from`, destination, exact data, thread and reply IDs, kind, mentions, hop count, and creation timestamp. Retry with the same client message ID and content to receive the same message rather than producing duplicate deliveries. Reusing an ID with changed content returns HTTP 409; JSON object key order does not count as a change.
 
 Inbox responses contain `messages`, `next_cursor`, and `acknowledgement_required: true`. Unacknowledged messages remain available after reads. `after` is pagination, not acknowledgement; callers should return to `after: 0` when recovering unprocessed items.
 

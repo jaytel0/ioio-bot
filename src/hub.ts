@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
 import { Store } from './store';
-import { ApiError, bearer, body, equal, hash, idSchema, inviteSchema, json, now, randomCode, randomToken, requireThat, sendSchema, type Env, type Row } from './shared';
+import { ApiError, bearer, body, canonical, equal, hash, idSchema, inviteSchema, json, now, randomCode, randomToken, requireThat, sendSchema, type Env, type Row } from './shared';
 import { OAuth } from './oauth';
 import { mcp } from './mcp';
 import { Events } from './events';
@@ -84,7 +84,11 @@ export class BtbHub extends DurableObject<Env> {
     requireThat(new TextEncoder().encode(JSON.stringify(input)).length <= 16384, 413, 'Message exceeds 16 KiB');
     const { result, recipients } = this.tx(() => {
       const existing = this.db.one('SELECT * FROM messages WHERE sender = ? AND client_message_id = ?', agentId, input.client_message_id);
-      if (existing) return { result: this.message(existing), recipients: [] };
+      if (existing) {
+        const sameContent = existing.target === (input.to ?? null) && existing.room_id === (input.room ?? null) && existing.text === (input.text ?? null) && existing.kind === input.kind && existing.reply_to === (input.reply_to ?? null) && canonical(existing.data === null ? null : JSON.parse(existing.data)) === canonical(input.data ?? null) && canonical(JSON.parse(existing.mentions)) === canonical(input.mentions) && (!input.thread_id || input.thread_id === existing.thread_id) && (input.reply_to || input.hop_count === existing.hop_count);
+        requireThat(sameContent, 409, 'client_message_id was already used for a different message');
+        return { result: this.message(existing), recipients: [] };
+      }
       let recipients: string[];
       if (input.to) {
         requireThat(!this.agent(input.to).revoked, 403, 'Target unavailable');

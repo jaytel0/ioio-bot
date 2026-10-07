@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
+import { readFile, mkdir, chmod, open, rename, link, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 
@@ -13,36 +13,47 @@ if (!/^[a-zA-Z0-9_-]{1,60}$/.test(profile)) throw new Error('Invalid profile nam
 const configRoot = process.env.BTB_CONFIG_DIR || join(homedir(), '.config', 'btb');
 const agentFile = flags.config || join(configRoot, 'agents', `${profile}.json`);
 const ownerFile = flags['owner-file'] || process.env.BTB_OWNER_FILE || join(configRoot, 'owner.json');
-async function load(path) { try { return JSON.parse(await readFile(path, 'utf8')); } catch { return {}; } }
-async function save(path, value) { await mkdir(dirname(path), { recursive: true, mode: 0o700 }); await chmod(dirname(path), 0o700); await writeFile(path, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 }); await chmod(path, 0o600); }
-const agent = await load(agentFile), owner = await load(ownerFile);
+async function load(path) { try { return JSON.parse(await readFile(path, 'utf8')); } catch (error) { if (error.code === 'ENOENT') return null; throw new Error(`Unable to read configuration; existing file was preserved: ${path}`); } }
+async function save(path, value, createOnly = false) {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const temporary = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
+  const file = await open(temporary, 'wx', 0o600);
+  try { await file.writeFile(JSON.stringify(value, null, 2) + '\n'); await file.sync(); } finally { await file.close(); }
+  try { if (createOnly) { await link(temporary, path); await unlink(temporary); } else await rename(temporary, path); await chmod(path, 0o600); }
+  catch (error) { await unlink(temporary).catch(() => {}); throw error; }
+}
+const loadedAgent = await load(agentFile), loadedOwner = await load(ownerFile);
+const agent = loadedAgent ?? {}, owner = loadedOwner ?? {};
 const server = String(flags.server || process.env.BTB_SERVER || agent.server || owner.server || 'https://btb.materic.ink').replace(/\/$/, '');
 if (!/^https:\/\//.test(server) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(server)) throw new Error('BTB requires HTTPS (or localhost for development)');
 async function request(path, input, ownerAuth = false, anonymous = false) {
   const token = ownerAuth ? process.env.BTB_ADMIN_TOKEN || owner.token : process.env.BTB_TOKEN || agent.token;
   if (!anonymous && !token) throw new Error(ownerAuth ? `Owner credential missing: ${ownerFile}` : 'Pair this profile first');
-  const response = await fetch(server + path, { method: input === undefined ? 'GET' : 'POST', headers: { ...(anonymous ? {} : { Authorization: `Bearer ${token}` }), ...(input === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: input === undefined ? undefined : JSON.stringify(input) });
+  const response = await fetch(server + path, { method: input === undefined ? 'GET' : 'POST', headers: { ...(anonymous ? {} : { Authorization: `Bearer ${token}` }), ...(input === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: input === undefined ? undefined : JSON.stringify(input), signal: AbortSignal.timeout(30000) });
   const result = await response.json(); if (!response.ok) throw new Error(`${response.status}: ${result.error || JSON.stringify(result)}`); return result;
 }
 const print = value => process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 try {
   switch (command) {
     case 'owner-init': {
-      if (owner.token) throw new Error('Owner credential already exists; it was preserved');
-      await save(ownerFile, { server, token: 'btb_owner_' + randomBytes(32).toString('hex') });
+      if (loadedOwner !== null) throw new Error('Owner configuration already exists; it was preserved');
+      await save(ownerFile, { server, token: 'btb_owner_' + randomBytes(32).toString('hex') }, true);
       print({ saved: ownerFile, next: 'Upload token as the Cloudflare BTB_ADMIN_TOKEN secret using bin/deploy-secret.mjs. Never share this file with bots.' }); break;
     }
     case 'owner-server': { if (!owner.token) throw new Error('Initialize owner first'); await save(ownerFile, { ...owner, server }); print({ server, saved: ownerFile }); break; }
     case 'agent-create': print(await request('/admin/agents', { name: positional[0], capabilities: (flags.capabilities || '').split(',').filter(Boolean) }, true)); break;
     case 'invite': print(await request('/admin/invites', { name: positional[0], ...(flags.agent ? { agent_id: flags.agent } : {}), capabilities: (flags.capabilities || '').split(',').filter(Boolean) }, true)); break;
     case 'pair': {
+      if (loadedAgent !== null) throw new Error('Profile already exists; credential and number were preserved. Choose a new --profile.');
       const result = await request('/v1/claim', { code: positional[0] }, false, true);
-      await save(agentFile, { server, token: result.token, agent: result.agent }); print({ agent: result.agent, saved: agentFile, expires: false }); break;
+      await save(agentFile, { server, token: result.token, agent: result.agent }, true); print({ agent: result.agent, saved: agentFile, expires: false }); break;
     }
     case 'register': {
-      const result = await request('/v1/register', { name: positional[0], capabilities: (flags.capabilities || '').split(',').filter(Boolean) }, false, true);
+      if (loadedAgent !== null) throw new Error('Profile already exists; credential and number were preserved. Choose a new --profile.');
       const guestOwnerFile = flags['owner-file'] || join(configRoot, 'owners', `${profile}.json`);
-      await save(agentFile, { server, token: result.token, agent: result.agent }); await save(guestOwnerFile, { server, token: result.owner_token });
+      if (await load(guestOwnerFile) !== null) throw new Error('Guest owner configuration already exists; it was preserved.');
+      const result = await request('/v1/register', { name: positional[0], capabilities: (flags.capabilities || '').split(',').filter(Boolean) }, false, true);
+      await save(guestOwnerFile, { server, token: result.owner_token }, true); await save(agentFile, { server, token: result.token, agent: result.agent }, true);
       print({ agent: result.agent, saved: agentFile, owner_saved: guestOwnerFile, expires: false }); break;
     }
     case 'whoami': print(await request('/v1/me')); break;

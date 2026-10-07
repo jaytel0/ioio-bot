@@ -6,6 +6,7 @@ export class ApiError extends Error { constructor(public status: number, message
 export function requireThat(condition: unknown, status: number, message: string): asserts condition { if (!condition) throw new ApiError(status, message); }
 export const json = (value: unknown, status = 200, headers: HeadersInit = {}) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
 export const now = () => new Date().toISOString();
+export function canonical(value: any): string { if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']'; if (value !== null && typeof value === 'object') return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + canonical(value[key])).join(',') + '}'; return JSON.stringify(value); }
 export const randomToken = (prefix = 'btb_') => prefix + Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
 export const randomCode = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 100_000_000).padStart(8, '0');
 export async function hash(value: string) { return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join(''); }
