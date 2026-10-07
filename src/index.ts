@@ -1,7 +1,8 @@
-import { ApiError, json, readLimitedText, requireThat, type Env } from './shared';
+import { ApiError, hash, json, readLimitedText, requireThat, type Env } from './shared';
 import { oauthHelpers, oauthProvider } from './oauth';
 import { createBackup } from './recovery';
 export { BtbHub } from './hub';
+export { BtbRequestGate } from './request-gate';
 
 export async function serve(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url), path = url.pathname;
@@ -11,7 +12,10 @@ export async function serve(request: Request, env: Env, ctx: ExecutionContext): 
     requireThat(!origin || allowed.has(origin), 403, 'Origin not allowed');
     const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
     requireThat((await env.EDGE_RATE_LIMITER.limit({ key: ip })).success, 429, 'Too many requests');
-    if (/^\/(oauth|owner)(\/|$)/.test(path) || path === '/v1/claim' || path === '/v1/register') requireThat((await env.AUTH_RATE_LIMITER.limit({ key: ip })).success, 429, 'Too many authentication requests');
+    const sensitive = /^\/(oauth|owner)(\/|$)/.test(path) || path === '/v1/claim' || path === '/v1/register';
+    if (sensitive) requireThat((await env.AUTH_RATE_LIMITER.limit({ key: ip })).success, 429, 'Too many authentication requests');
+    const gate = env.REQUEST_GATES.get(env.REQUEST_GATES.idFromName(await hash(env.BTB_INTERNAL_SECRET + ':' + ip))) as any;
+    requireThat((await gate.consume(sensitive, { requests: Number(env.BTB_REQUEST_LIMIT ?? 120), auth: Number(env.BTB_AUTH_LIMIT ?? 20) })).success, 429, 'Too many requests');
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}), 'Vary': 'Origin', 'Access-Control-Allow-Headers': 'Authorization,Content-Type,MCP-Protocol-Version,Mcp-Session-Id', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS' } });
     // Bound chunked bodies before OAuth, JSON parsing, or database access.
     if (request.body) {

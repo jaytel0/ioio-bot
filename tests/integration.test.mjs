@@ -35,14 +35,15 @@ async function client(token, modern = false) {
 before(async () => {
   const config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));
   config.kv_namespaces.push({binding:'RECOVERY_KV',id:'00000000000000000000000000000001'});
-  config.main = fixtureFile; config.vars = { BTB_BASE_URL: base, BTB_ADMIN_TOKEN: admin, BTB_INTERNAL_SECRET: 'integration-internal', BTB_OWNER_EMAIL: 'owner@example.com', GOOGLE_CLIENT_ID: 'test-google-client', GOOGLE_CLIENT_SECRET: 'test-google-secret', BACKUP_ENCRYPTION_KEY: '01'.repeat(32) };
+  config.main = fixtureFile; config.vars = { BTB_BASE_URL: base, BTB_ADMIN_TOKEN: admin, BTB_INTERNAL_SECRET: 'integration-internal', BTB_OWNER_EMAIL: 'owner@example.com', GOOGLE_CLIENT_ID: 'test-google-client', GOOGLE_CLIENT_SECRET: 'test-google-secret', BACKUP_ENCRYPTION_KEY: '01'.repeat(32), BTB_REQUEST_LIMIT:'2000', BTB_AUTH_LIMIT:'200' };
+  config.ratelimits[0].namespace_id = '61601'; config.ratelimits[1].namespace_id = '61602';
   config.ratelimits[0].simple.limit = 2000; config.ratelimits[1].simple.limit = 200;
   await writeFile(configFile, JSON.stringify(config));
   await writeFile(fixtureFile, `
-import application, { BtbHub, serve } from '${process.cwd()}/src/index';
+import application, { BtbHub, BtbRequestGate, serve } from '${process.cwd()}/src/index';
 import { oauthHelpers } from '${process.cwd()}/src/oauth';
 import { restoreBackup } from '${process.cwd()}/src/recovery';
-export { BtbHub };
+export { BtbHub, BtbRequestGate };
 export default { async fetch(request, env, ctx) {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/__test/')) {
@@ -55,6 +56,7 @@ export default { async fetch(request, env, ctx) {
       return Response.json(await oauthHelpers(env).completeAuthorization({request:parsed,userId:'fixture-user',scope:['btb'],metadata:{agent_id:agent.id},props:{agent_id:agent.id,owner_id:'home',userId:'fixture-user'},revokeExistingGrants:false}));
     }
     if (url.pathname === '/__test/google-owner') { const input = await request.json(); return Response.json(await hub.googleOwner(input.subject,input.email)); }
+    if (url.pathname === '/__test/strict-gate') { const gate=env.REQUEST_GATES.get(env.REQUEST_GATES.idFromName('strict-fixture')); return Response.json(await Promise.all([gate.consume(true,{requests:2,auth:2}),gate.consume(true,{requests:2,auth:2}),gate.consume(true,{requests:2,auth:2})])); }
     if (url.pathname === '/__test/edge-deny') return serve(new Request(env.BTB_BASE_URL+'/v1/me'), {...env,EDGE_RATE_LIMITER:{limit:async()=>({success:false})},HUB:{get:()=>{throw new Error('Database reached')}}},ctx);
     if (url.pathname === '/__test/restore') return restoreBackup({...env,OAUTH_KV:env.RECOVERY_KV,HUB:{idFromName:()=>env.HUB.idFromName('restore-fixture'),get:id=>env.HUB.get(id)}},await request.json());
     if (url.pathname === '/__test/recovered') return env.HUB.get(env.HUB.idFromName('restore-fixture')).fetch(new Request(env.BTB_BASE_URL+url.searchParams.get('path'),{method:request.method,headers:request.headers,body:request.method==='GET'?undefined:await request.text()}));
@@ -119,6 +121,9 @@ test('maintained OAuth enforces PKCE, audience, consent cookies, refresh and rev
   const token = async (data,status=200) => {const r=await fetch(base+'/oauth/token',{method:'POST',body:new URLSearchParams(data)});const v=await r.json();assert.equal(r.status,status,JSON.stringify(v));return v;};
   await token({...form,resource:'https://wrong.invalid/mcp'},400); await token({...form,code_verifier:randomBytes(48).toString('base64url')},400);
   const grant = await token(form), connected = await clientFor(grant.access_token); assert.equal((await connected.callTool({name:'btb_whoami',arguments:{}})).structuredContent.id,dot.agent.id); await connected.close();
+  const replayCompleted=await api('/__test/complete?'+q+'&agent_id='+dot.agent.id);
+  const replayForm={...form,code:new URL(replayCompleted.redirectTo).searchParams.get('code')};
+  await token(replayForm);await token(replayForm,400);
   const next = await token({grant_type:'refresh_token',client_id:c.client_id,resource:base+'/mcp',refresh_token:grant.refresh_token});
   const nextClient=await clientFor(next.access_token); assert.equal((await nextClient.callTool({name:'btb_whoami',arguments:{}})).structuredContent.id,dot.agent.id); await nextClient.close();
   // Follow the maintained provider's published RFC 7009 endpoint.
@@ -162,3 +167,5 @@ test('CLI pairing stores private credentials and its stdio bridge serves real MC
   await c.connect(new StdioClientTransport({ command: process.execPath, args: ['bin/btb.mjs', 'mcp', '--config', config, '--server', base] }));
   try { assert.equal((await c.callTool({ name: 'btb_whoami', arguments: {} })).structuredContent.id, stored.agent.id); } finally { await c.close(); }
 });
+
+test('persistent request gate enforces concurrent limits before message storage',async()=>{const results=await api('/__test/strict-gate');assert.equal(results.filter(x=>x.success).length,2);assert.equal(results.filter(x=>!x.success).length,1);});

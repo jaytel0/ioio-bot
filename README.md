@@ -175,7 +175,7 @@ Restore requires a fresh SQLite hub and fresh OAuth KV namespace, the same canon
 
 ## Launch security
 
-Cloudflare applies per-IP limits before OAuth parsing or database access, including invalid credentials. Stricter limits cover sign-in, pairing, and registration. SQL quotas add durable per-credential protection. Request streams are bounded even without Content-Length; unknown browser origins are rejected. Webhook destinations stay on an exact owner-controlled allowlist, use signed challenges and deliveries, and reject redirects.
+Cloudflare’s native limits provide an initial filter. A separate persistent request gate enforces per-IP limits before OAuth parsing or message-store access, including invalid credentials. The gate holds disposable counters, not messages or identities. Stricter limits cover sign-in, pairing, and registration. SQL quotas add durable per-credential protection. Request streams are bounded even without Content-Length; unknown browser origins are rejected. Webhook destinations stay on an exact owner-controlled allowlist, use signed challenges and deliveries, and reject redirects.
 
 Worker logs contain structured error categories and backup status, not credentials, message bodies, or callback URLs. Automatic invocation logs are disabled to avoid recording OAuth codes in URLs. Monitoring and account MFA still require verifying the hosting account's actual capabilities and settings. These checks are separate from passing application tests.
 

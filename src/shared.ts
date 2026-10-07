@@ -2,11 +2,12 @@ import { z } from 'zod';
 
 import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 export interface Env {
-  HUB: DurableObjectNamespace; OAUTH_KV: KVNamespace; BACKUPS: R2Bucket;
+  HUB: DurableObjectNamespace; REQUEST_GATES: DurableObjectNamespace; OAUTH_KV: KVNamespace; BACKUPS: R2Bucket;
   BTB_ADMIN_TOKEN: string; BTB_INTERNAL_SECRET: string; BTB_BASE_URL: string;
   GOOGLE_CLIENT_ID: string; GOOGLE_CLIENT_SECRET: string; BTB_OWNER_EMAIL: string;
   BACKUP_ENCRYPTION_KEY: string; BTB_ALLOWED_ORIGINS?: string;
   EDGE_RATE_LIMITER: RateLimit; AUTH_RATE_LIMITER: RateLimit;
+  BTB_REQUEST_LIMIT?: string; BTB_AUTH_LIMIT?: string;
   OAUTH_PROVIDER: OAuthHelpers;
 }
 export type Row = Record<string, any>;
