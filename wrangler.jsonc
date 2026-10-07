@@ -1,11 +1,28 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "btb",
+  "account_id": "5b1750f49e112591828fab356c5a3010",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-07",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "BtbHub" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BtbHub"] }],
-  "observability": { "enabled": false }
+  "preview_urls": false,
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "98d25bc9cbd64b50bba1e3525283218c" }],
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "btb-backups" }],
+  "ratelimits": [
+    { "name": "EDGE_RATE_LIMITER", "namespace_id": "60601", "simple": { "limit": 120, "period": 60 } },
+    { "name": "AUTH_RATE_LIMITER", "namespace_id": "60602", "simple": { "limit": 20, "period": 60 } }
+  ],
+  "vars": {
+    "BTB_BASE_URL": "https://btb.molly-codex.workers.dev",
+    "BTB_OWNER_EMAIL": "jaytel@materic.inc",
+    "BTB_ALLOWED_ORIGINS": "https://chatgpt.com"
+  },
+  "triggers": { "crons": ["15 9 * * *"] },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": false, "head_sampling_rate": 1 }
+  }
 }

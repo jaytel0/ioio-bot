@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile, chmod } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 const ownerFile = process.env.BTB_OWNER_FILE || join(homedir(), '.config', 'btb', 'owner.json');
-const owner = JSON.parse(await readFile(ownerFile, 'utf8'));
+const owner = process.env.BTB_ADMIN_TOKEN ? { token: process.env.BTB_ADMIN_TOKEN, server: 'https://btb.molly-codex.workers.dev' } : JSON.parse(await readFile(ownerFile, 'utf8'));
 const server = (process.argv[2] || owner.server).replace(/\/$/, '');
 async function api(path, input) { const r = await fetch(server + path, { method: input ? 'POST' : 'GET', headers: { Authorization: `Bearer ${owner.token}`, 'Content-Type': 'application/json' }, body: input ? JSON.stringify(input) : undefined }); const result = await r.json(); if (!r.ok) throw new Error(`${r.status}: ${result.error}`); return result; }
 const state = await api('/admin/state');

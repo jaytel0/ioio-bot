@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
@@ -9,11 +9,14 @@ import { once } from 'node:events';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import WebSocket from 'ws';
+import { build } from 'esbuild';
 
 const base = 'http://127.0.0.1:8798', admin = 'integration-owner', directory = await mkdtemp(join(tmpdir(), 'btb-test-'));
 let worker, logs = '', dot, grok, muse, guest, sent;
+const configFile = join(directory, 'wrangler.json');
+const fixtureFile = join(directory, 'entry.ts');
 async function start() {
-  worker = spawn(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'dev', '--local', '--ip', '127.0.0.1', '--port', '8798', '--inspector-port', '0', '--persist-to', join(directory, 'storage'), '--var', `BTB_ADMIN_TOKEN:${admin}`], { detached: true, env: { ...process.env, CI: 'true', WRANGLER_SEND_METRICS: 'false' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  worker = spawn(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'dev', '--local', '--ip', '127.0.0.1', '--port', '8798', '--inspector-port', '0', '--config', configFile, '--persist-to', join(directory, 'storage')], { detached: true, env: { ...process.env, CI: 'true', WRANGLER_SEND_METRICS: 'false' }, stdio: ['ignore', 'pipe', 'pipe'] });
   worker.stdout.on('data', x => { logs = (logs + x).slice(-16000); }); worker.stderr.on('data', x => { logs = (logs + x).slice(-16000); });
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) { try { if ((await fetch(base + '/health')).ok) return; } catch {} await new Promise(r => setTimeout(r, 100)); }
@@ -22,14 +25,43 @@ async function start() {
 async function stop() { if (worker?.pid) { const exited = once(worker, 'exit'); process.kill(-worker.pid, 'SIGTERM'); await exited; worker = undefined; } }
 async function api(path, input, token = admin, expected = 200) {
   const r = await fetch(base + path, { method: input === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: input === undefined ? undefined : JSON.stringify(input) });
-  const result = await r.json(); assert.equal(r.status, expected, JSON.stringify(result)); return result;
+  const text = await r.text(); const result = text ? JSON.parse(text) : {}; assert.equal(r.status, expected, JSON.stringify(result)); return result;
 }
 async function enroll(name) { const inv = await api('/admin/invites', { name }, admin, 201); const agent = await api('/v1/claim', { code: inv.code }, '', 201); assert.equal(agent.expires_at, null); return agent; }
 async function client(token, modern = false) {
   const c = new Client({ name: 'btb-test', version: '1' }, modern ? { versionNegotiation: { mode: { pin: '2026-07-28' } } } : {});
   await c.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${token}` } } })); return c;
 }
-before(async () => { await start(); dot = await enroll('dot'); grok = await enroll('grokbot'); muse = await enroll('muse'); guest = await api('/v1/register', { name: 'outside' }, '', 201); });
+before(async () => {
+  const config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));
+  config.kv_namespaces.push({binding:'RECOVERY_KV',id:'00000000000000000000000000000001'});
+  config.main = fixtureFile; config.vars = { BTB_BASE_URL: base, BTB_ADMIN_TOKEN: admin, BTB_INTERNAL_SECRET: 'integration-internal', BTB_OWNER_EMAIL: 'owner@example.com', GOOGLE_CLIENT_ID: 'test-google-client', GOOGLE_CLIENT_SECRET: 'test-google-secret', BACKUP_ENCRYPTION_KEY: '01'.repeat(32) };
+  config.ratelimits[0].simple.limit = 2000; config.ratelimits[1].simple.limit = 200;
+  await writeFile(configFile, JSON.stringify(config));
+  await writeFile(fixtureFile, `
+import application, { BtbHub, serve } from '${process.cwd()}/src/index';
+import { oauthHelpers } from '${process.cwd()}/src/oauth';
+import { restoreBackup } from '${process.cwd()}/src/recovery';
+export { BtbHub };
+export default { async fetch(request, env, ctx) {
+  const url = new URL(request.url);
+  if (url.pathname.startsWith('/__test/')) {
+    if (url.pathname !== '/__test/recovered' && request.headers.get('Authorization') !== 'Bearer integration-owner') return Response.json({}, {status:403});
+    const hub = env.HUB.get(env.HUB.idFromName('btb-hub-v1'));
+    if (url.pathname === '/__test/complete') {
+      const parsed = await oauthHelpers(env).parseAuthRequest(new Request(env.BTB_BASE_URL + '/oauth/authorize' + url.search));
+      const agent = (await hub.ownerAgents('home')).find(a => a.id === url.searchParams.get('agent_id'));
+      if (!agent) return Response.json({}, {status:403});
+      return Response.json(await oauthHelpers(env).completeAuthorization({request:parsed,userId:'fixture-user',scope:['btb'],metadata:{agent_id:agent.id},props:{agent_id:agent.id,owner_id:'home',userId:'fixture-user'},revokeExistingGrants:false}));
+    }
+    if (url.pathname === '/__test/google-owner') { const input = await request.json(); return Response.json(await hub.googleOwner(input.subject,input.email)); }
+    if (url.pathname === '/__test/edge-deny') return serve(new Request(env.BTB_BASE_URL+'/v1/me'), {...env,EDGE_RATE_LIMITER:{limit:async()=>({success:false})},HUB:{get:()=>{throw new Error('Database reached')}}},ctx);
+    if (url.pathname === '/__test/restore') return restoreBackup({...env,OAUTH_KV:env.RECOVERY_KV,HUB:{idFromName:()=>env.HUB.idFromName('restore-fixture'),get:id=>env.HUB.get(id)}},await request.json());
+    if (url.pathname === '/__test/recovered') return env.HUB.get(env.HUB.idFromName('restore-fixture')).fetch(new Request(env.BTB_BASE_URL+url.searchParams.get('path'),{method:request.method,headers:request.headers,body:request.method==='GET'?undefined:await request.text()}));
+  }
+  return application.fetch(request,env,ctx);
+}};`);
+  await start(); dot = await enroll('dot'); grok = await enroll('grokbot'); muse = await enroll('muse'); guest = await api('/v1/register', { name: 'outside' }, '', 201); });
 after(async () => { await stop(); await rm(directory, { recursive: true, force: true }); });
 
 test('unpaired users cannot read private messages or use tools', async () => { await api('/v1/me', undefined, '', 401); await api('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' }, '', 401); });
@@ -69,21 +101,55 @@ test('real-time streams deliver messages and revocation closes the socket', asyn
   const arrival = once(ws, 'message'); const message = await api('/v1/messages', { to: fresh.agent.id, text: 'live', client_message_id: randomUUID() }, dot.token, 201); assert.equal(JSON.parse((await arrival)[0]).message.id, message.id);
   const closed = once(ws, 'close'); await api('/admin/revoke', { agent_id: fresh.agent.id }); assert.equal((await closed)[0], 1008); await api('/v1/me', undefined, fresh.token, 401);
 });
-test('OAuth enforces owner approval, PKCE, audience, one-use codes and durable rotating refresh', async () => {
-  const redirect = 'http://127.0.0.1:9876/callback', client = await api('/oauth/register', { redirect_uris: [redirect], token_endpoint_auth_method: 'none' }, '', 201);
+test('maintained OAuth enforces PKCE, audience, consent cookies, refresh and revocation', async () => {
+  const redirect = 'http://127.0.0.1:9876/callback', c = await api('/oauth/register', { client_name: '<script>bad</script>', redirect_uris: [redirect], token_endpoint_auth_method: 'none' }, '', 201);
   const verifier = randomBytes(48).toString('base64url'), challenge = createHash('sha256').update(verifier).digest('base64url');
-  const q = new URLSearchParams({ client_id: client.client_id, redirect_uri: redirect, response_type: 'code', resource: base + '/mcp', scope: 'btb', code_challenge_method: 'S256', code_challenge: challenge, state: 'state-check' });
-  const response = await fetch(base + '/oauth/authorize?' + q, { redirect: 'manual' }); assert.equal(response.status, 303);
-  const wait = response.headers.get('location'); const approval = await (await fetch(wait)).text(); const code = approval.match(/Verification code: (\d{8})/)[1];
-  await api('/admin/oauth/approve', { code, agent_id: dot.agent.id }, dot.token, 403); await api('/admin/oauth/approve', { code, agent_id: dot.agent.id });
-  const finish = await fetch(wait, { redirect: 'manual' }); const callback = new URL(finish.headers.get('location')); assert.equal(callback.searchParams.get('state'), 'state-check'); assert.equal(callback.searchParams.get('iss'), base);
-  const form = { grant_type: 'authorization_code', client_id: client.client_id, redirect_uri: redirect, resource: base + '/mcp', code_verifier: verifier, code: callback.searchParams.get('code') };
-  const token = async (data, status = 200) => { const r = await fetch(base + '/oauth/token', { method: 'POST', body: new URLSearchParams(data) }); const result = await r.json(); assert.equal(r.status, status, JSON.stringify(result)); return result; };
-  await token({ ...form, resource: 'https://wrong.invalid/mcp' }, 400); await token({ ...form, code_verifier: randomBytes(48).toString('base64url') }, 400);
-  const grant = await token(form); await token(form, 400); assert.equal((await api('/v1/me', undefined, grant.access_token)).id, dot.agent.id);
-  const next = await token({ grant_type: 'refresh_token', client_id: client.client_id, resource: base + '/mcp', refresh_token: grant.refresh_token });
-  const snapshot = await api('/admin/export'); const persisted = snapshot.tables.tokens.find(t => t.hash === createHash('sha256').update(next.refresh_token).digest('hex')); assert.equal(persisted.expires_at, null);
-  await token({ grant_type: 'refresh_token', client_id: client.client_id, resource: base + '/mcp', refresh_token: grant.refresh_token }, 400); await api('/v1/me', undefined, next.access_token, 401);
+  const q = new URLSearchParams({ client_id: c.client_id, redirect_uri: redirect, response_type: 'code', resource: base + '/mcp', scope: 'btb', code_challenge_method: 'S256', code_challenge: challenge, state: 'state-check' });
+  const consent = await fetch(base + '/oauth/authorize?' + q); assert.equal(consent.status, 200);
+  const html = await consent.text(); assert(!html.includes('<script>bad</script>')); assert(html.includes('&#60;script&#62;'));
+  assert(consent.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
+  const handle = html.match(/name="handle" value="([^"]+)"/)[1];
+  const unbound = await fetch(base+'/oauth/authorize',{method:'POST',body:new URLSearchParams({handle,decision:'allow'}),redirect:'manual'}); assert.equal(unbound.status,400);
+  const cookies = consent.headers.getSetCookie().map(x=>x.split(';')[0]).join('; ');
+  const denied = await fetch(base+'/oauth/authorize',{method:'POST',headers:{Cookie:cookies},body:new URLSearchParams({handle,decision:'deny'}),redirect:'manual'}); assert.equal(denied.status,302); assert(new URL(denied.headers.get('location')).searchParams.get('error')==='access_denied');
+  const replay = await fetch(base+'/oauth/authorize',{method:'POST',headers:{Cookie:cookies},body:new URLSearchParams({handle,decision:'allow'}),redirect:'manual'}); assert.equal(replay.status,400);
+  const completed = await api('/__test/complete?'+q+'&agent_id='+dot.agent.id);
+  const callback = new URL(completed.redirectTo); assert.equal(callback.searchParams.get('state'),'state-check'); assert.equal(callback.searchParams.get('iss'),base);
+  const form = {grant_type:'authorization_code',client_id:c.client_id,redirect_uri:redirect,resource:base+'/mcp',code_verifier:verifier,code:callback.searchParams.get('code')};
+  const token = async (data,status=200) => {const r=await fetch(base+'/oauth/token',{method:'POST',body:new URLSearchParams(data)});const v=await r.json();assert.equal(r.status,status,JSON.stringify(v));return v;};
+  await token({...form,resource:'https://wrong.invalid/mcp'},400); await token({...form,code_verifier:randomBytes(48).toString('base64url')},400);
+  const grant = await token(form), connected = await clientFor(grant.access_token); assert.equal((await connected.callTool({name:'btb_whoami',arguments:{}})).structuredContent.id,dot.agent.id); await connected.close();
+  const next = await token({grant_type:'refresh_token',client_id:c.client_id,resource:base+'/mcp',refresh_token:grant.refresh_token});
+  const nextClient=await clientFor(next.access_token); assert.equal((await nextClient.callTool({name:'btb_whoami',arguments:{}})).structuredContent.id,dot.agent.id); await nextClient.close();
+  // Follow the maintained provider's published RFC 7009 endpoint.
+  const discovery=await (await fetch(base+'/.well-known/oauth-authorization-server')).json();
+  const revoked=await fetch(discovery.revocation_endpoint,{method:'POST',body:new URLSearchParams({token:next.refresh_token,client_id:c.client_id})}); assert.equal(revoked.status,200);
+  await api('/mcp',{jsonrpc:'2.0',id:1,method:'tools/list'},next.access_token,401);
+});
+const clientFor = token => client(token,true);
+test('Google owner mapping preserves subjects and isolates other owners',async()=>{
+  const owner=await api('/__test/google-owner',{subject:'google-owner',email:'owner@example.com'});assert.equal(owner.owner_id,'home');
+  const outside=await api('/__test/google-owner',{subject:'google-outside',email:'outside@example.com'});assert.notEqual(outside.owner_id,'home');
+  const repeat=await api('/__test/google-owner',{subject:'google-outside',email:'changed@example.com'});assert.equal(repeat.owner_id,outside.owner_id);
+});
+test('forged internal identities, unknown browser origins, and oversized bodies are rejected',async()=>{
+  const forged=await fetch(base+'/admin/state',{headers:{'X-BTB-Principal':JSON.stringify({kind:'owner',owner_id:'home',hash:'root'}),'X-BTB-Internal-Auth':'fake'}});assert.equal(forged.status,401);
+  const origin=await fetch(base+'/v1/me',{headers:{Origin:'https://evil.invalid',Authorization:'Bearer '+dot.token}});assert.equal(origin.status,403);
+  const huge=await fetch(base+'/v1/inbox',{method:'POST',headers:{Authorization:'Bearer '+dot.token},body:' '.repeat(32769)});assert.equal(huge.status,413);
+  await api('/__test/edge-deny',undefined,admin,429);
+  await api('/admin/export',undefined,dot.token,403);await api('/admin/export',undefined,guest.owner_token,403);
+});
+test('encrypted backup round-trips and restores identity and inbox into an empty isolated network',async()=>{
+  for(let i=0;i<16;i++) await api('/oauth/register',{redirect_uris:['http://127.0.0.1:9876/callback'],token_endpoint_auth_method:'none'},'',201);
+  const backup=await api('/admin/backup',{});assert.equal(backup.verified,true);
+  const encrypted=await api('/admin/backup/download?key='+encodeURIComponent(backup.key));assert.equal(encrypted.format,'btb-encrypted-v1');assert(!JSON.stringify(encrypted).includes(sent.text));
+  const moduleFile=join(directory,'recovery.mjs');await build({entryPoints:['src/recovery.ts'],outfile:moduleFile,bundle:true,platform:'node',format:'esm'});
+  const {openBackup}=await import(moduleFile),snapshot=await openBackup(encrypted,'01'.repeat(32));assert(snapshot.oauth.some(x=>x.key.startsWith('client:')));
+  let response=await api('/__test/restore',snapshot);while(!response.restored) response=await api('/__test/restore',snapshot);assert.equal(response.restored,true);
+  const me=await api('/__test/recovered?path=/v1/me',undefined,dot.token);assert.equal(me.id,dot.agent.id);
+  const inbox=await api('/__test/recovered?path=/v1/inbox',{include_acked:true},grok.token);assert(inbox.messages.some(x=>x.id===sent.id));
+  assert.equal((await api('/__test/restore',snapshot)).restored,true);
+  await api('/admin/restore',snapshot,admin,409);
 });
 test('CLI pairing stores private credentials and its stdio bridge serves real MCP', async () => {
   const inv = await api('/admin/invites', { name: 'cli-bot' }, admin, 201), config = join(directory, 'cli', 'agent.json');

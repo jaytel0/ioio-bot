@@ -1,19 +1,17 @@
 import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
 import { Store } from './store';
-import { ApiError, bearer, body, canonical, equal, hash, idSchema, inviteSchema, json, now, randomCode, randomToken, requireThat, sendSchema, type Env, type Row } from './shared';
-import { OAuth } from './oauth';
+import { ApiError, bearer, body, readLimitedText, canonical, equal, hash, idSchema, inviteSchema, json, now, randomCode, randomToken, requireThat, sendSchema, type Env, type Row } from './shared';
+import { oauthHelpers } from './oauth';
 import { mcp } from './mcp';
 import { Events } from './events';
 
 export class BtbHub extends DurableObject<Env> {
   readonly db: Store;
-  readonly oauth: OAuth;
   readonly events: Events;
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.db = new Store(ctx.storage.sql);
-    this.oauth = new OAuth(this);
     this.events = new Events(this);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -30,9 +28,17 @@ export class BtbHub extends DurableObject<Env> {
     } else this.db.run('INSERT OR REPLACE INTO limits VALUES (?, 1, ?)', key, time + interval);
   }
   async auth(request: Request, owner = false): Promise<Row> {
+    if (this.env.BTB_INTERNAL_SECRET && equal(request.headers.get('X-BTB-Internal-Auth') ?? '', this.env.BTB_INTERNAL_SECRET)) {
+      const principal = JSON.parse(request.headers.get('X-BTB-Principal') ?? 'null');
+      requireThat(principal && typeof principal.owner_id === 'string', 401, 'Invalid internal identity');
+      if (owner) requireThat(principal.kind === 'owner', 403, 'Human owner required');
+      else { const agent = this.agent(principal.agent_id); requireThat(!agent.revoked && agent.owner_id === principal.owner_id && principal.kind === 'oauth', 403, 'Agent unavailable'); }
+      this.rate(`internal:${principal.owner_id}:${principal.agent_id ?? 'owner'}`);
+      return principal;
+    }
     const token = bearer(request);
     requireThat(token, 401, 'Authentication required');
-    if (this.env.BTB_ADMIN_TOKEN && equal(token, this.env.BTB_ADMIN_TOKEN)) { requireThat(owner, 403, 'Use an agent credential for agent tools'); return { owner_id: 'home', kind: 'owner', hash: 'root' }; }
+    if (this.env.BTB_ADMIN_TOKEN && equal(token, this.env.BTB_ADMIN_TOKEN)) { requireThat(owner, 403, 'Use an agent credential for agent tools'); this.rate('root-owner'); return { owner_id: 'home', kind: 'owner', hash: 'root' }; }
     const row = this.db.one('SELECT * FROM tokens WHERE hash = ?', await hash(token));
     requireThat(row && !row.used && row.kind !== 'refresh' && (!row.expires_at || row.expires_at > Date.now()), 401, 'Invalid or revoked credential');
     if (row.kind === 'oauth') requireThat(row.resource === this.base(request) + '/mcp', 401, 'Token audience mismatch');
@@ -44,6 +50,39 @@ export class BtbHub extends DurableObject<Env> {
   }
   agent(id: string): Row { const agent = this.db.one('SELECT * FROM agents WHERE id = ?', id); requireThat(agent, 404, 'Agent not found'); return agent; }
   profile(agent: Row) { return { id: agent.id, name: agent.name, capabilities: JSON.parse(agent.capabilities), created_at: agent.created_at }; }
+  googleOwner(subject: string, email: string) {
+    requireThat(subject.length > 0 && subject.length <= 256 && email.length <= 320, 400, 'Invalid Google identity');
+    return this.tx(() => {
+      let owner = this.db.one('SELECT * FROM google_owners WHERE subject = ?', subject);
+      if (!owner) {
+        const owner_id = email === this.env.BTB_OWNER_EMAIL ? 'home' : crypto.randomUUID();
+        requireThat(!this.db.one('SELECT 1 FROM google_owners WHERE owner_id = ?', owner_id), 403, 'Owner identity already bound');
+        this.db.run('INSERT INTO google_owners VALUES (?, ?, ?)', subject, owner_id, email);
+        owner = { subject, owner_id, email };
+        if (owner_id !== 'home') this.createAgent(owner_id, email.split('@')[0] + ' agent');
+      }
+      return owner;
+    });
+  }
+  ownerAgents(owner_id: string) { return this.db.all('SELECT * FROM agents WHERE owner_id = ? AND revoked = 0', owner_id).map(a => this.profile(a)); }
+  checkpointRestore(digest: string, start: number, end: number, complete: boolean) {
+    this.tx(() => {
+      requireThat(this.db.one("SELECT value FROM recovery_state WHERE key = 'digest'")?.value === digest, 409, 'Restore checkpoint mismatch');
+      requireThat(Number(this.db.one("SELECT value FROM recovery_state WHERE key = 'cursor'")?.value) === start, 409, 'Another restore is in progress');
+      this.db.run("UPDATE recovery_state SET value = ? WHERE key = 'cursor'", String(end));
+      this.db.run("UPDATE recovery_state SET value = ? WHERE key = 'status'", complete ? 'complete' : 'restoring');
+    });
+  }
+  async grantActive(family: string) {
+    const at = family.indexOf(':'); if (at < 0) return false;
+    const userId = family.slice(0, at), grantId = family.slice(at + 1);
+    let cursor: string | undefined;
+    do { const page = await oauthHelpers(this.env).listUserGrants(userId, { limit: 100, cursor });
+      const grant = page.items.find(g => g.id === grantId); if (grant) return !grant.expiresAt || grant.expiresAt > Date.now() / 1000;
+      cursor = page.cursor;
+    } while (cursor);
+    return false;
+  }
   agentId() { let id: string; do { const digits = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000_000).padStart(9, '0'); id = `A-${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`; } while (this.db.one('SELECT 1 FROM agents WHERE id = ?', id)); return id; }
   createAgent(owner: string, name: string, capabilities: string[] = []) {
     requireThat(this.db.one('SELECT COUNT(*) AS n FROM agents WHERE owner_id = ?', owner)!.n < (owner === 'home' ? 1000 : 10), 507, 'Owner agent quota reached');
@@ -164,10 +203,9 @@ export class BtbHub extends DurableObject<Env> {
     return { agent: this.profile(agent), token, expires_at: null };
   }
   async admin(owner: Row, request: Request, path: string) {
-    const input = request.method === 'GET' ? {} : await body(request);
+    const input = request.method === 'GET' ? {} : path === '/admin/restore' ? JSON.parse(await readLimitedText(request, 8 * 1024 * 1024)) : await body(request);
     if (path === '/admin/agents' && request.method === 'POST') { const v = inviteSchema.omit({ agent_id: true }).parse(input); return json(this.profile(this.tx(() => this.createAgent(owner.owner_id, v.name, v.capabilities))), 201); }
     if (path === '/admin/invites' && request.method === 'POST') return json(await this.mintInvite(owner, input), 201);
-    if (path === '/admin/oauth/approve' && request.method === 'POST') return json(await this.oauth.approve(owner, input));
     if (path === '/admin/connections/decide' && request.method === 'POST') {
       const v = z.object({ request_id: z.string().uuid(), decision: z.enum(['accepted', 'rejected', 'revoked']) }).strict().parse(input);
       const connection = this.db.one('SELECT * FROM connections WHERE id = ?', v.request_id); requireThat(connection, 404, 'Connection request not found');
@@ -193,23 +231,34 @@ export class BtbHub extends DurableObject<Env> {
       agents: this.db.all('SELECT * FROM agents WHERE owner_id = ?', owner.owner_id).map(a => ({ ...this.profile(a), revoked: Boolean(a.revoked), credentials: this.db.one("SELECT COUNT(*) AS n FROM tokens WHERE agent_id = ? AND kind != 'refresh'", a.id)!.n })),
       rooms: this.db.all('SELECT * FROM rooms WHERE owner_id = ?', owner.owner_id),
       connection_requests: this.db.all('SELECT c.* FROM connections c JOIN agents a ON a.id = c.target WHERE a.owner_id = ?', owner.owner_id),
-      pending_oauth: owner.hash === 'root' ? this.db.all('SELECT id, client_id, redirect_uri, expires_at FROM oauth_flows WHERE agent_id IS NULL AND expires_at > ?', Date.now()) : [],
+      pending_oauth: [],
       delivery: this.db.all('SELECT o.status, COUNT(*) AS n FROM outbox o JOIN subscriptions s ON s.id = o.subscription_id JOIN agents a ON a.id = s.agent_id WHERE a.owner_id = ? GROUP BY o.status', owner.owner_id)
     });
     if (path === '/admin/export' && request.method === 'GET') {
       requireThat(owner.hash === 'root', 403, 'Root owner only');
-      const tables = ['agents', 'tokens', 'invites', 'rooms', 'members', 'connections', 'messages', 'deliveries', 'oauth_clients', 'oauth_flows', 'oauth_codes', 'subscriptions', 'outbox', 'webhook_hosts'];
-      return json({ version: 1, exported_at: now(), tables: Object.fromEntries(tables.map(table => [table, this.db.all(`SELECT * FROM ${table}`)])) });
+      return json({ version: 2, exported_at: now(), canonical_url: this.env.BTB_BASE_URL, tables: this.db.export() });
+    }
+    if (path === '/admin/restore' && request.method === 'POST') {
+      requireThat(owner.hash === 'root', 403, 'Root owner only');
+      requireThat(input.version === 2 && input.canonical_url === this.env.BTB_BASE_URL, 400, 'Backup version or canonical URL mismatch');
+      const digest = await hash(canonical(input));
+      const previous = this.db.one("SELECT value FROM recovery_state WHERE key = 'digest'");
+      if (previous) {
+        requireThat(previous.value === digest, 409, 'This network was already restored from another backup');
+        return json({ digest, cursor: Number(this.db.one("SELECT value FROM recovery_state WHERE key = 'cursor'")!.value), restored: this.db.one("SELECT value FROM recovery_state WHERE key = 'status'")!.value === 'complete' });
+      }
+      requireThat(this.db.one('SELECT COUNT(*) AS n FROM agents')!.n === 0, 409, 'Restore requires an empty network');
+      this.tx(() => { this.db.restore(input.tables); this.db.run("INSERT INTO recovery_state VALUES ('digest', ?), ('cursor', '0'), ('status', 'restoring')", digest); });
+      return json({ digest, cursor: 0, restored: false });
     }
     throw new ApiError(404, 'Unknown owner endpoint');
   }
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname;
     try {
-      if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization,Content-Type,MCP-Protocol-Version,Mcp-Session-Id', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS' } });
+      requireThat(path === '/admin/restore' || path === '/health' || this.db.one("SELECT value FROM recovery_state WHERE key = 'status'")?.value !== 'restoring', 503, 'Recovery in progress');
       if (request.method === 'GET' && (path === '/' || path === '/health')) return json({ service: 'BTB', version: '0.1.0', status: 'ok', mcp: this.base(request) + '/mcp', docs: this.base(request) + '/docs', durable: true });
       if (request.method === 'GET' && path === '/docs') return new Response('BTB is a headless agent network. Connect to /mcp with OAuth, or use a permanent agent Bearer credential.\nPair with POST /v1/claim {"code":"<8 digits>"}; send /v1/messages; read /v1/inbox; acknowledge /v1/ack; request consent /v1/connections.\nSource and setup: https://github.com/jaytel0/btb\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
-      if (path.startsWith('/.well-known/') || path.startsWith('/oauth/')) return await this.oauth.handle(request);
       if (path.startsWith('/admin/')) return await this.admin(await this.auth(request, true), request, path);
       if (path === '/v1/claim' && request.method === 'POST') { this.rate('claim-global', 2000, 86400000); this.rate(`claim:${request.headers.get('CF-Connecting-IP') ?? 'local'}`, 10, 60000); return json(await this.claim(await body(request)), 201); }
       if (path === '/v1/register' && request.method === 'POST') {

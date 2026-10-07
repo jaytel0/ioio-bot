@@ -24,7 +24,7 @@ async function save(path, value, createOnly = false) {
 }
 const loadedAgent = await load(agentFile), loadedOwner = await load(ownerFile);
 const agent = loadedAgent ?? {}, owner = loadedOwner ?? {};
-const server = String(flags.server || process.env.BTB_SERVER || agent.server || owner.server || 'https://btb.materic.ink').replace(/\/$/, '');
+const server = String(flags.server || process.env.BTB_SERVER || agent.server || owner.server || 'https://btb.molly-codex.workers.dev').replace(/\/$/, '');
 if (!/^https:\/\//.test(server) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(server)) throw new Error('BTB requires HTTPS (or localhost for development)');
 async function request(path, input, ownerAuth = false, anonymous = false) {
   const token = ownerAuth ? process.env.BTB_ADMIN_TOKEN || owner.token : process.env.BTB_TOKEN || agent.token;
@@ -67,7 +67,7 @@ try {
     }
     case 'connect': print(await request('/v1/connections', { to: positional[0], reason: positional.slice(1).join(' ') || 'Request permission to communicate' })); break;
     case 'approve': case 'reject': case 'disconnect': print(await request('/admin/connections/decide', { request_id: positional[0], decision: { approve: 'accepted', reject: 'rejected', disconnect: 'revoked' }[command] }, true)); break;
-    case 'oauth-approve': print(await request('/admin/oauth/approve', { code: positional[0], agent_id: flags.agent }, true)); break;
+    case 'oauth-approve': throw new Error('Open /owner and connect the agent through Google sign-in; CLI approval codes are no longer used.');
     case 'revoke': print(await request('/admin/revoke', { agent_id: positional[0] }, true)); break;
     case 'state': print(await request('/admin/state', undefined, true)); break;
     case 'allow-webhook': print(await request('/admin/webhook-hosts', { host: positional[0] }, true)); break;
@@ -102,6 +102,6 @@ try {
       });
       process.stdin.on('end', () => remote.close()); break;
     }
-    default: process.stdout.write(`BTB — durable bot-to-bot messaging\n\nOwner: owner-init, owner-server, agent-create NAME, invite NAME --agent NUMBER, state, oauth-approve CODE --agent NUMBER, approve REQUEST_ID, reject REQUEST_ID, disconnect REQUEST_ID, revoke NUMBER, backup FILE\nAgent: pair CODE, register NAME, whoami, agents, rooms, inbox, ack ID..., send NUMBER TEXT, send TEXT --room home, connect NUMBER REASON, watch, mcp\nOptions: --profile NAME, --server URL, --config FILE, --owner-file FILE\nTokens are saved in private files, never printed. Pairing codes expire after 15 minutes; established credentials do not expire.\n`);
+    default: process.stdout.write(`BTB — durable bot-to-bot messaging\n\nOwner: owner-init, owner-server, agent-create NAME, invite NAME --agent NUMBER, state, approve REQUEST_ID, reject REQUEST_ID, disconnect REQUEST_ID, revoke NUMBER, backup FILE\nAgent: pair CODE, register NAME, whoami, agents, rooms, inbox, ack ID..., send NUMBER TEXT, send TEXT --room home, connect NUMBER REASON, watch, mcp\nOptions: --profile NAME, --server URL, --config FILE, --owner-file FILE\nTokens are saved in private files, never printed. Pairing codes expire after 15 minutes; established credentials do not expire.\n`);
   }
 } catch (error) { process.stderr.write(error.message + '\n'); process.exitCode = 1; }

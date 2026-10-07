@@ -1,6 +1,14 @@
 import { z } from 'zod';
 
-export interface Env { HUB: DurableObjectNamespace; BTB_ADMIN_TOKEN: string; BTB_BASE_URL?: string; }
+import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
+export interface Env {
+  HUB: DurableObjectNamespace; OAUTH_KV: KVNamespace; BACKUPS: R2Bucket;
+  BTB_ADMIN_TOKEN: string; BTB_INTERNAL_SECRET: string; BTB_BASE_URL: string;
+  GOOGLE_CLIENT_ID: string; GOOGLE_CLIENT_SECRET: string; BTB_OWNER_EMAIL: string;
+  BACKUP_ENCRYPTION_KEY: string; BTB_ALLOWED_ORIGINS?: string;
+  EDGE_RATE_LIMITER: RateLimit; AUTH_RATE_LIMITER: RateLimit;
+  OAUTH_PROVIDER: OAuthHelpers;
+}
 export type Row = Record<string, any>;
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 export function requireThat(condition: unknown, status: number, message: string): asserts condition { if (!condition) throw new ApiError(status, message); }
@@ -12,7 +20,16 @@ export const randomCode = () => String(crypto.getRandomValues(new Uint32Array(1)
 export async function hash(value: string) { return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join(''); }
 export function equal(a: string, b: string) { let difference = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) difference |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return difference === 0; }
 export const bearer = (r: Request) => r.headers.get('Authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1] ?? '';
-export async function body(r: Request) { requireThat(Number(r.headers.get('Content-Length') ?? 0) <= 32768, 413, 'Request exceeds 32 KiB'); const text = await r.text(); requireThat(new TextEncoder().encode(text).length <= 32768, 413, 'Request exceeds 32 KiB'); try { return JSON.parse(text); } catch { throw new ApiError(400, 'Invalid JSON'); } }
+export async function readLimitedText(r: Request, limit = 32768) {
+  requireThat(Number(r.headers.get('Content-Length') ?? 0) <= limit, 413, 'Request too large');
+  if (!r.body) return '';
+  const reader = r.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
+  try { while (true) { const { value, done } = await reader.read(); if (done) break; size += value.length; requireThat(size <= limit, 413, 'Request too large'); chunks.push(value); } }
+  catch (error) { await reader.cancel().catch(() => {}); throw error; }
+  const bytes = new Uint8Array(size); let at = 0; for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; }
+  return new TextDecoder().decode(bytes);
+}
+export async function body(r: Request) { const text = await readLimitedText(r); try { return JSON.parse(text); } catch { throw new ApiError(400, 'Invalid JSON'); } }
 export const idSchema = z.string().regex(/^A-\d{3}-\d{3}-\d{3}$/);
 export const sendSchema = z.object({
   to: idSchema.optional(), room: z.string().min(1).max(80).optional(),

@@ -1,9 +1,43 @@
-import type { Env } from './shared';
+import { ApiError, json, readLimitedText, requireThat, type Env } from './shared';
+import { oauthHelpers, oauthProvider } from './oauth';
+import { createBackup } from './recovery';
 export { BtbHub } from './hub';
+
+export async function serve(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const url = new URL(request.url), path = url.pathname;
+  try {
+    requireThat(new URL(env.BTB_BASE_URL).origin === url.origin, 421, 'Use the canonical BTB address');
+    const origin = request.headers.get('Origin'), allowed = new Set([env.BTB_BASE_URL, ...(env.BTB_ALLOWED_ORIGINS ?? '').split(',').filter(Boolean)]);
+    requireThat(!origin || allowed.has(origin), 403, 'Origin not allowed');
+    const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
+    requireThat((await env.EDGE_RATE_LIMITER.limit({ key: ip })).success, 429, 'Too many requests');
+    if (/^\/(oauth|owner)(\/|$)/.test(path) || path === '/v1/claim' || path === '/v1/register') requireThat((await env.AUTH_RATE_LIMITER.limit({ key: ip })).success, 429, 'Too many authentication requests');
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}), 'Vary': 'Origin', 'Access-Control-Allow-Headers': 'Authorization,Content-Type,MCP-Protocol-Version,Mcp-Session-Id', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS' } });
+    // Bound chunked bodies before OAuth, JSON parsing, or database access.
+    if (request.body) {
+      const limit = path === '/admin/restore' ? 8 * 1024 * 1024 : path === '/oauth/token' ? 8192 : 32768;
+      request = new Request(request, { body: await readLimitedText(request, limit) });
+    }
+    const response = await oauthProvider(env).fetch(request, env, ctx);
+    if (response.status === 101) return response;
+    const headers = new Headers(response.headers);
+    headers.set('X-Content-Type-Options', 'nosniff'); headers.set('Referrer-Policy', 'no-referrer');
+    headers.set('Cache-Control', 'no-store'); headers.set('Vary', 'Origin');
+    if (url.protocol === 'https:') headers.set('Strict-Transport-Security', 'max-age=31536000');
+    if (origin) headers.set('Access-Control-Allow-Origin', origin);
+    return new Response(response.body, { status: response.status, headers });
+  } catch (error) {
+    if (error instanceof ApiError) return json({ error: error.message }, error.status, error.status === 429 ? { 'Retry-After': '60' } : {});
+    console.error(JSON.stringify({ event: 'request_failure', name: error instanceof Error ? error.name : 'unknown' }));
+    return json({ error: 'Internal service error' }, 500);
+  }
+}
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    // One durable coordinator is intentional for a small personal network. Its name is
-    // stable across deployments; never replace it to solve a deployment problem.
-    return env.HUB.get(env.HUB.idFromName('btb-hub-v1')).fetch(request);
+  fetch: serve,
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil((async () => {
+      try { await createBackup(env); await oauthHelpers(env).purgeExpiredData({ batchSize: 20 }); }
+      catch { console.error(JSON.stringify({ event: 'backup_failure' })); throw new Error('BTB daily backup failed'); }
+    })());
   }
 } satisfies ExportedHandler<Env>;

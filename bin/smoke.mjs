@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import WebSocket from 'ws';
-const owner = JSON.parse(await readFile(process.env.BTB_OWNER_FILE || join(homedir(), '.config', 'btb', 'owner.json'), 'utf8'));
+const owner = process.env.BTB_ADMIN_TOKEN ? { token: process.env.BTB_ADMIN_TOKEN, server: 'https://btb.molly-codex.workers.dev' } : JSON.parse(await readFile(process.env.BTB_OWNER_FILE || join(homedir(), '.config', 'btb', 'owner.json'), 'utf8'));
 const server = (process.argv[2] || owner.server).replace(/\/$/, '');
 const created = [];
 async function api(path, input, token = owner.token) { const r = await fetch(server + path, { method: input ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: input ? JSON.stringify(input) : undefined }); const result = await r.json(); if (!r.ok) throw new Error(`${r.status}: ${result.error}`); return result; }

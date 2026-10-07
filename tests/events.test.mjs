@@ -16,7 +16,7 @@ function fixture() {
   const sql = { exec(query, ...params) { if (!params.length && query.includes(';')) { sqlite.exec(query); return { toArray: () => [] }; } const statement = sqlite.prepare(query); let values = []; if (statement.columns().length) values = statement.all(...params); else statement.run(...params); return { toArray: () => values }; } };
   const db = new Store(sql); db.run("INSERT INTO agents VALUES ('A-000-000-001', 'dot', 'home', '[]', '2026-10-07T12:00:00Z', 0)");
   let alarm;
-  const hub = { db, agent: id => db.one('SELECT * FROM agents WHERE id = ?', id), storage: { async setAlarm(time) { alarm = time; } } };
+  const hub = { grantActive: async () => false, db, agent: id => db.one('SELECT * FROM agents WHERE id = ?', id), storage: { async setAlarm(time) { alarm = time; } } };
   return { db, events: new Events(hub), alarm: () => alarm, close: () => sqlite.close() };
 }
 const principal = { agent_id: 'A-000-000-001' };

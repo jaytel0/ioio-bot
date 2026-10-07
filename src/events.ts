@@ -78,7 +78,7 @@ export class Events {
     const pending = this.hub.db.all("SELECT * FROM outbox WHERE status = 'pending' AND next_at <= ? ORDER BY next_at LIMIT 20", Date.now());
     for (const item of pending) {
       const sub = this.hub.db.one('SELECT * FROM subscriptions WHERE id = ?', item.subscription_id);
-      const grantValid = !sub?.grant_family || Boolean(this.hub.db.one('SELECT 1 FROM tokens WHERE family = ?', sub.grant_family));
+      const grantValid = !sub?.grant_family || await this.hub.grantActive(sub.grant_family);
       if (!sub || !grantValid || this.hub.agent(sub.agent_id).revoked || (sub.expires_at && sub.expires_at <= Date.now())) { this.hub.db.run("UPDATE outbox SET status = 'stopped' WHERE id = ?", item.id); continue; }
       const message = this.hub.db.one('SELECT kind, created_at FROM messages WHERE seq = ?', item.seq)!;
       let status = 0;

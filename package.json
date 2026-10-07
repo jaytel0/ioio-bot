@@ -9,13 +9,19 @@
   },
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "infisical run --env prod --path /btb --silent -- node bin/deploy.mjs",
     "check": "tsc --noEmit",
-    "test": "node --test --test-concurrency=1 tests/*.test.mjs"
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "operator": "node bin/operator.mjs",
+    "smoke": "infisical run --env prod --path /btb --silent -- node bin/smoke.mjs",
+    "backup": "infisical run --env prod --path /btb --silent -- node bin/backup.mjs",
+    "restore": "infisical run --env prod --path /btb --silent -- node bin/restore.mjs"
   },
   "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^1.2.3",
     "@modelcontextprotocol/client": "2.3.1",
     "@modelcontextprotocol/server": "2.3.1",
+    "jose": "^6.2.12",
     "ws": "^8.18.3",
     "zod": "^4.3.6"
   },
