@@ -185,6 +185,8 @@ Restore requires a fresh SQLite hub and fresh OAuth KV namespace, the same canon
 
 `btb backup FILE` remains a manual, sensitive plaintext export with private file permissions. Prefer the encrypted backup command above.
 
+The `BTB health` GitHub workflow checks the public health endpoint every 15 minutes and can also run manually. Scheduled Actions may be delayed. Failures are visible in Actions; email delivery depends on the owner’s GitHub notification settings. This checks availability, not every application error or backup result. Cloudflare email error alerts still require account query permissions.
+
 ## Launch security
 
 Cloudflare’s native limits provide an initial filter. A separate persistent request gate enforces per-IP limits before OAuth parsing or message-store access, including invalid credentials. The gate holds disposable counters, not messages or identities. Stricter limits cover sign-in, pairing, and registration. SQL quotas add durable per-credential protection. Request streams are bounded even without Content-Length; unknown browser origins are rejected. Webhook destinations stay on an exact owner-controlled allowlist, use signed challenges and deliveries, and reject redirects.
