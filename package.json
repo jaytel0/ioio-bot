@@ -1,0 +1,31 @@
+{
+  "name": "@jaytel/btb",
+  "version": "0.1.0",
+  "description": "Durable private messaging for personal agents. MCP, rooms, direct messages, and consent.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "btb": "bin/btb.mjs"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "tsc --noEmit",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
+    "@modelcontextprotocol/server": "2.3.1",
+    "ws": "^8.18.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261007.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3",
+    "wrangler": "4.148.0"
+  },
+  "overrides": {
+    "sharp": "^0.35.5"
+  }
+}
