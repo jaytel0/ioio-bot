@@ -65,8 +65,19 @@ export async function invoke(hub: BtbHub, agentId: string, name: string, args: R
 export async function mcp(hub: BtbHub, principal: Row, request: Request) {
   const parsed = request.method === 'POST' ? await body(request) : undefined;
   if (parsed?.method?.startsWith('events/')) {
-    try { const { _meta, ...params } = parsed.params ?? {}; return json({ jsonrpc: '2.0', id: parsed.id, result: await hub.events.handle(principal, parsed.method, params) }); }
-    catch (error) { return json({ jsonrpc: '2.0', id: parsed.id, error: { code: error instanceof ApiError && error.status === 502 ? -32015 : -32602, message: error instanceof Error ? error.message : 'Event operation failed' } }); }
+    // Log only protocol outcomes, never callback paths, signing keys or messages.
+    let callbackHost: string | undefined;
+    try { callbackHost = new URL(parsed.params?.delivery?.url).hostname; } catch { /* discovery has no callback */ }
+    const context = { event: 'mcp_event', method: parsed.method, callback_host: callbackHost };
+    try {
+      const { _meta, ...params } = parsed.params ?? {};
+      const result = await hub.events.handle(principal, parsed.method, params);
+      console.info(JSON.stringify({ ...context, outcome: 'success' }));
+      return json({ jsonrpc: '2.0', id: parsed.id, result });
+    } catch (error) {
+      console.warn(JSON.stringify({ ...context, outcome: 'failure', status: error instanceof ApiError ? error.status : 400, reason: error instanceof ApiError ? error.message : 'Invalid event parameters' }));
+      return json({ jsonrpc: '2.0', id: parsed.id, error: { code: error instanceof ApiError && error.status === 502 ? -32015 : -32602, message: error instanceof Error ? error.message : 'Event operation failed' } });
+    }
   }
   if (parsed?.method === 'tools/call' && typeof parsed.params?.name === 'string') parsed.params.name = parsed.params.name.replace(/^btb_/, 'ioio_');
   const handler = createMcpHandler(() => createServer(hub, principal), { responseMode: 'json', maxRequestBodySize: 32768, keepAliveMs: 0 });

@@ -77,13 +77,21 @@ if(setup)setInterval(async()=>{if(document.hidden||document.querySelector('dialo
 `;
 const copyLabel = (text: string) => `<span class="copy-label">${text}</span><span class="copy-result" aria-hidden="true">Copied</span>`;
 const agentLogos: Record<string,string> = { dot:'dot.svg', instinct:'instinct.ico', grokbot:'grokbot.png', grok:'grokbot.png', muse:'muse.svg' };
-export function sitePage(title: string, content: string, options: { headers?: Headers; targets?: string[]; scripts?: boolean; account?: boolean; menu?: string; landing?: boolean; privacyLink?: boolean } = {}) {
+export function sitePage(title: string, content: string, options: { headers?: Headers; targets?: string[]; scripts?: boolean; account?: boolean; menu?: string; landing?: boolean; privacyLink?: boolean; returnTo?: string } = {}) {
   const headers = options.headers ?? new Headers(), nonce = randomToken('');
   const origins = [...new Set((options.targets ?? []).map(x => new URL(x)).filter(x => ['https:', 'http:'].includes(x.protocol)).map(x => x.origin))];
   headers.set('Content-Type', 'text/html; charset=utf-8'); headers.set('Cache-Control', 'no-store');
   headers.set('Content-Security-Policy', `default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'; script-src 'nonce-${nonce}'; connect-src 'self'; form-action 'self' ${origins.join(' ')}; base-uri 'none'; frame-ancestors 'none'`);
-  headers.set('X-Frame-Options', 'DENY'); headers.set('Referrer-Policy', 'same-origin');
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · ioio</title><link rel="preload" href="/assets/InterVariable.woff2" as="font" type="font/woff2" crossorigin><style>${css}${options.account ? numberCss : ''}${options.landing ? landingCss : ''}</style></head><body><header><a class="wordmark" href="/">ioio</a>${options.menu ?? ''}</header><main class="${options.landing ? 'landing' : options.account ? '' : 'consent'}">${content}</main>${options.privacyLink === false ? '' : '<footer><a href="/privacy">Privacy</a></footer>'}${options.scripts ? `<script nonce="${nonce}">${script}${options.landing ? landingScript : ''}</script>` : ''}</body></html>`, { headers });
+  headers.set('X-Frame-Options', 'DENY'); headers.set('Referrer-Policy', options.returnTo ? 'no-referrer' : 'same-origin');
+  // A POST redirect can be blocked when the client's callback itself redirects
+  // to another origin. Navigate from this completed document instead, preserving
+  // form-action restrictions and a clickable fallback when scripts are disabled.
+  const returnScript = options.returnTo ? `<script nonce="${nonce}">location.replace(${JSON.stringify(options.returnTo).replace(/</g, '\\u003c')})</script>` : '';
+  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · ioio</title><link rel="preload" href="/assets/InterVariable.woff2" as="font" type="font/woff2" crossorigin><style>${css}${options.account ? numberCss : ''}${options.landing ? landingCss : ''}</style></head><body><header><a class="wordmark" href="/">ioio</a>${options.menu ?? ''}</header><main class="${options.landing ? 'landing' : options.account ? '' : 'consent'}">${content}</main>${options.privacyLink === false ? '' : '<footer><a href="/privacy">Privacy</a></footer>'}${options.scripts ? `<script nonce="${nonce}">${script}${options.landing ? landingScript : ''}</script>` : ''}${returnScript}</body></html>`, { headers });
+}
+// Only call with the OAuth provider's completed, validated redirect URL.
+export function authorizationReturn(redirectTo: string, headers = new Headers()) {
+  return sitePage('Return to your agent', `<h1>Return to your agent</h1><a class="button" href="${escape(redirectTo)}">Continue</a>`, { headers, returnTo: redirectTo, privacyLink: false });
 }
 export function landing() {
   const letters = [...'ioio'].map(letter => `<span class="brand-slot"><span class="brand-letter">${letter}</span><canvas class="brand-character" width="256" height="256" aria-hidden="true"></canvas></span>`).join('');
