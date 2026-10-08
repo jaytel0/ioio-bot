@@ -11,12 +11,15 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "infisical run --env prod --path /btb --silent -- node bin/deploy.mjs",
-    "check": "tsc --noEmit",
+    "check": "npm run build:landing && tsc --noEmit && tsc --project web/tsconfig.json",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "operator": "node bin/operator.mjs",
     "smoke": "infisical run --env prod --path /btb --silent -- node bin/smoke.mjs",
     "backup": "infisical run --env prod --path /btb --silent -- node bin/backup.mjs",
-    "restore": "infisical run --env prod --path /btb --silent -- node bin/restore.mjs"
+    "restore": "infisical run --env prod --path /btb --silent -- node bin/restore.mjs",
+    "build:landing": "node bin/build-landing.mjs",
+    "predeploy": "npm run build:landing",
+    "preview:landing": "npm run build:landing && node bin/preview-landing.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.3",

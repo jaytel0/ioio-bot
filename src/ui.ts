@@ -1,3 +1,4 @@
+import { landingScript } from './generated/landing-script';
 import { randomToken, type Row } from './shared';
 
 export const escape = (value: unknown) => String(value).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -20,57 +21,21 @@ const landingCss = `
 body>header{display:none}
 .landing{min-height:calc(100svh - 64px);padding:48px var(--gutter);margin:0 auto}
 .landing .brand{font-size:clamp(100px,19vw,180px);line-height:1;letter-spacing:0;margin:0;font-weight:650;max-width:none}
-.brand-play{--spring:linear(0,.12 6%,.4 14%,.72 23%,.94 32%,1.055 43%,1.07 52%,1.035 65%,.995 82%,1);display:flex;gap:0;padding:0;background:none;color:#000;border-radius:12px;font:inherit;cursor:pointer}
+.brand-play{display:flex;justify-content:center;align-items:center;position:relative;width:2.8em;height:1.16em;min-height:0;padding:0;background:none;color:#000;border-radius:12px;font:inherit;cursor:pointer;touch-action:manipulation}
 .brand-play:active{transform:none}.brand-play:disabled{opacity:1}
-.brand-slot{display:grid;place-items:center;height:1em;position:relative;width:var(--letter-width);transition:width 460ms var(--spring)}
-.brand-letter,.brand-logo{grid-area:1/1;pointer-events:none;transition:transform 460ms var(--spring),opacity 140ms ease-out}
-.brand-letter{letter-spacing:-.065em}.brand-slot:last-child .brand-letter{padding-right:.065em}
-.brand-letter{transform-origin:50% 61%}
-.brand-logo{position:absolute;top:61%;left:50%;translate:-50% -50%;width:.58em;height:.58em;object-fit:contain;opacity:0;transform:scale(.6);border-radius:24%}
-.brand-slot.is-logo{width:.63em}
-.brand-slot.is-logo .brand-letter{opacity:0;transform:scale(.6)}
-.brand-slot.is-logo .brand-logo{opacity:1;transform:scale(1)}
+.brand-play:not(.is-ready) .brand-slot{top:.1276em}
+.brand-slot{display:block;position:relative;height:1em;pointer-events:none}
+.brand-letter{display:block;letter-spacing:-.065em;white-space:pre}
+.brand-slot:last-child .brand-letter{padding-right:.065em}
+.brand-character{display:none;position:absolute;width:.6em;height:.6em;border-radius:24%;pointer-events:none}
+.brand-play.is-ready .brand-slot{position:absolute;left:50%;top:0;width:0;height:100%;will-change:transform}
+.brand-play.is-ready .brand-letter,.brand-play.is-ready .brand-character{position:absolute;left:0;top:61%;transform:translate(-50%,-50%);transform-origin:center;will-change:transform,opacity}
+.brand-play.is-ready .brand-letter{line-height:1}.brand-play.is-ready .brand-character{top:calc(61% + .1em);display:block;opacity:0}
 .landing .tagline{font-size:clamp(18px,3vw,24px);font-weight:450;letter-spacing:-.65px;margin:28px 0 36px;line-height:1.3}
 .landing+footer{text-align:center;padding:20px var(--gutter);height:64px}
-@media(prefers-reduced-motion:reduce){.brand-slot,.brand-letter,.brand-logo{transition:none}.brand-letter{opacity:1!important;transform:none!important}.brand-logo{display:none}.brand-play{cursor:default}}
+@media(prefers-reduced-motion:reduce){.brand-character{display:none!important}.brand-play{cursor:default}.brand-play.is-ready .brand-letter{opacity:1!important;transform:translate(-50%,-50%)!important}}
 `;
 const script = `
-const brand=document.querySelector('.brand-play');
-if(brand){
-  const reduced=matchMedia('(prefers-reduced-motion: reduce)'),slots=[...brand.querySelectorAll('.brand-slot')];
-  const artwork=[...document.querySelectorAll('[data-brand-source]')];
-  let timer,paused=false,last=-1,beats=0;
-  const pick=items=>items[Math.floor(Math.random()*items.length)];
-  const running=()=>!paused&&!document.hidden&&!reduced.matches;
-  function schedule(delay=1200){clearTimeout(timer);if(running())timer=setTimeout(step,delay)}
-  function step(){
-    if(!running())return;
-    if(++beats>10){slots.forEach(s=>s.classList.remove('is-logo'));beats=0;schedule(1600);return}
-    const active=slots.filter(s=>s.classList.contains('is-logo'));
-    const candidates=slots.filter((s,i)=>i!==last&&(active.length<3||s.classList.contains('is-logo')));
-    const slot=pick(candidates),image=slot.querySelector('img');last=slots.indexOf(slot);
-    if(slot.classList.contains('is-logo'))slot.classList.remove('is-logo');
-    else{
-      const used=active.map(s=>s.querySelector('img').getAttribute('src'));
-      const available=artwork.filter(a=>a.complete&&a.naturalWidth&&!used.includes(a.getAttribute('src')));
-      if(available.length){image.src=pick(available).getAttribute('src');slot.classList.add('is-logo')}
-    }
-    schedule(pick([240,380,620,900]));
-  }
-  function preference(){
-    brand.disabled=reduced.matches;brand.setAttribute('aria-pressed',String(paused));
-    brand.setAttribute('aria-label',reduced.matches?'ioio':paused?'Play logo animation':'Pause logo animation');
-    if(reduced.matches)slots.forEach(s=>s.classList.remove('is-logo'));
-    schedule();
-  }
-  brand.addEventListener('click',()=>{paused=!paused;preference()});
-  reduced.addEventListener('change',preference);document.addEventListener('visibilitychange',()=>schedule());
-  document.fonts.ready.then(()=>{
-    const size=parseFloat(getComputedStyle(brand).fontSize);
-    slots.forEach(slot=>slot.style.setProperty('--letter-width',slot.querySelector('.brand-letter').getBoundingClientRect().width/size+'em'));
-    preference();
-  });
-}
 const status=document.querySelector('[role=status]');
 const say=text=>{if(status)status.textContent=text};
 const timers=new WeakMap(),originalLabels=new WeakMap();
@@ -120,12 +85,11 @@ export function sitePage(title: string, content: string, options: { headers?: He
   headers.set('Content-Type', 'text/html; charset=utf-8'); headers.set('Cache-Control', 'no-store');
   headers.set('Content-Security-Policy', `default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'; script-src 'nonce-${nonce}'; connect-src 'self'; form-action 'self' ${origins.join(' ')}; base-uri 'none'; frame-ancestors 'none'`);
   headers.set('X-Frame-Options', 'DENY'); headers.set('Referrer-Policy', 'same-origin');
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · ioio</title><link rel="preload" href="/assets/InterVariable.woff2" as="font" type="font/woff2" crossorigin><style>${css}${options.account ? numberCss : ''}${options.landing ? landingCss : ''}</style></head><body><header><a class="wordmark" href="/">ioio</a>${options.menu ?? ''}</header><main class="${options.landing ? 'landing' : options.account ? '' : 'consent'}">${content}</main>${options.privacyLink === false ? '' : '<footer><a href="/privacy">Privacy</a></footer>'}${options.scripts ? `<script nonce="${nonce}">${script}</script>` : ''}</body></html>`, { headers });
+  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · ioio</title><link rel="preload" href="/assets/InterVariable.woff2" as="font" type="font/woff2" crossorigin><style>${css}${options.account ? numberCss : ''}${options.landing ? landingCss : ''}</style></head><body><header><a class="wordmark" href="/">ioio</a>${options.menu ?? ''}</header><main class="${options.landing ? 'landing' : options.account ? '' : 'consent'}">${content}</main>${options.privacyLink === false ? '' : '<footer><a href="/privacy">Privacy</a></footer>'}${options.scripts ? `<script nonce="${nonce}">${script}${options.landing ? landingScript : ''}</script>` : ''}</body></html>`, { headers });
 }
 export function landing() {
-  const logos = ['grok.svg', 'instinct.svg', 'muse.svg', 'dot-yellow.svg?v=2', 'dot-blue.svg'];
-  const letters = [...'ioio'].map((letter, i) => `<span class="brand-slot"><span class="brand-letter">${letter}</span><img class="brand-logo" src="/assets/landing/${logos[i]}" alt="" width="104" height="104" decoding="async"></span>`).join('');
-  return sitePage('Your agents, connected', `<h1 class="brand" aria-label="ioio"><button class="brand-play" aria-label="Pause logo animation" aria-pressed="false" title="Pause or play"><span class="brand-letters" aria-hidden="true" style="display:contents">${letters}</span></button></h1><div hidden>${logos.map(logo=>`<img data-brand-source src="/assets/landing/${logo}" alt="">`).join('')}</div><p class="tagline">Your agents, connected</p><a class="button" href="/owner/login">Continue with Google</a>`, { landing: true, scripts: true });
+  const letters = [...'ioio'].map(letter => `<span class="brand-slot"><span class="brand-letter">${letter}</span><canvas class="brand-character" width="256" height="256" aria-hidden="true"></canvas></span>`).join('');
+  return sitePage('Your agents, connected', `<h1 class="brand" aria-label="ioio"><button class="brand-play" aria-label="Pause logo animation" aria-pressed="false" title="Pause or play"><span aria-hidden="true" style="display:contents">${letters}</span></button></h1><p class="tagline">Your agents, connected</p><a class="button" href="/owner/login">Continue with Google</a>`, { landing: true, scripts: true });
 }
 export function setupMessage(base: string, token: string) {
   return `${base}/setup#${token}`;

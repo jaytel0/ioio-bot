@@ -1,3 +1,5 @@
+Landing update, October 8, 2026: the hero now uses live procedural character renderers in `web/characters.ts` and the MIT-licensed measured bloub engine. It no longer displays the static landing SVGs below. Full source URLs, licensing, research scope and fidelity limitations: [docs/landing/RESEARCH.md](../../docs/landing/RESEARCH.md). The older assets remain reference evidence.
+
 Self-hosted assets, retrieved October 7, 2026. Provider marks identify connected agents; they do not imply verified provider affiliation.
 
 Landing artwork follows the user-supplied Figma reference, `materic mark`, frame 6:8: https://www.figma.com/design/yrkfdRbYchnEQZoANJfNsy/materic-mark?node-id=6-8
