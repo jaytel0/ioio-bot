@@ -43,3 +43,24 @@ Deployment: the Mac Mini's Infisical CLI reported “No valid login session foun
 The prod `/btb` secret scope could not be loaded. `wrangler whoami` also reported
 that this machine is not authenticated to Cloudflare. No secrets were printed or saved,
 and no production deployment has been claimed.
+
+## Accelerating snap revision
+
+Replaced the fixed score and crossfade with varied phrases and discrete swaps.
+The outgoing artwork compresses for 360 ms on entry / 280 ms on exit, using
+`0.12t + 0.88t⁴`; the replacement pops from 32% scale with a damped release.
+Adjacent centers follow springs. Each phrase covers all five artworks and uses
+fresh slot order, bounded dwell/stagger timing and typography rests.
+
+Fresh 18-second checks after this revision:
+
+| Viewport | Samples | Artworks | Clipping / overflow | Layout shift | p95 frame interval | Max center step |
+| --- | ---: | --- | --- | ---: | ---: | ---: |
+| 1200 × 863 | 1066 | all 5 | none | 0 | 17.4 ms | 12.57 px |
+| 320 × 844 | 1074 | all 5 | none | 0 | 17.4 ms | 4.04 px |
+
+`npm run check` and all 44 existing tests pass. Reviewed a 40-second native screen
+recording and a 12 fps close-up contact sheet for the compression/swap. The latest
+recording is `captures/desktop-latest.mp4`; its still is `desktop-latest.png`.
+The earlier captures and reduced-motion results above refer to the first revision.
+Production deployment remains blocked by the previously reported authentication.
