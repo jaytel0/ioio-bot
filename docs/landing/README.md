@@ -45,7 +45,9 @@ at the source's visibility delay. It does not use the Minis 1.7 wrapper expansio
 
 - `web/characters.ts`: procedural fur, curved-volume shading, independent eyes,
   glasses, beret, bow tie, Jollybot face and shoulder/wrist animation. In-memory
-  canvases cache generated fibres; no source media is loaded by the landing page.
+  canvases cache generated fibres. Fur is clipped to each antialiased silhouette
+  for clean outer contours while retaining the interior texture; no source media
+  is loaded by the landing page.
 - `web/vendor/bloub`: pinned MIT Grok geometry/animation engine; upstream license
   and measurement notes included. Only idle and wink are selected by ioio.
 - `web/landing.ts`: varied phrases that always mix one or two characters with letters between them,

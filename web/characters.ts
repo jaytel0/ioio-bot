@@ -53,6 +53,9 @@ function fur(c:Ctx,path:Path2D,options:{seed:number;color:[number,number,number]
  base.addColorStop(0,`rgb(${color.map(v=>Math.min(255,v*1.07)).join(',')})`);
  base.addColorStop(1,`rgb(${color.map(v=>v*.72).join(',')})`);
  c.fillStyle=base;c.fill(path);
+ // Keep the fibres inside the antialiased silhouette: soft texture inside,
+ // a clean contour outside, instead of stray hairs against the typography.
+ c.save();c.clip(path);
  c.lineCap='round';
  // Fine dense fibres; stable seeds avoid shimmering between animation frames.
  for(let i=0;i<count*2.5;i++){
@@ -69,7 +72,7 @@ function fur(c:Ctx,path:Path2D,options:{seed:number;color:[number,number,number]
   c.lineWidth=.18+rng()*.27;c.beginPath();c.moveTo(x-dx*len*.2,y-dy*len*.2);
   c.quadraticCurveTo(x+dx*len*.4-dy*curl,y+dy*len*.4+dx*curl,x+dx*len,y+dy*len);c.stroke();
  }
-
+ c.restore();
 }
 const pear=new Path2D('M 147 54 C 180 52 197 89 205 117 C 216 151 247 174 244 211 C 242 245 212 268 163 274 C 121 278 59 272 37 246 C 12 218 34 175 59 149 C 92 117 104 57 147 54 Z');
 const cloud=new Path2D('M 67 91 C 75 66 110 59 130 74 C 154 54 193 64 204 89 C 226 90 238 116 228 137 C 252 154 253 181 233 197 C 237 222 209 240 185 231 C 162 254 129 250 111 238 C 80 255 46 235 43 216 C 15 218 0 193 13 169 C -5 145 11 117 40 116 C 40 103 51 92 67 91 Z');
