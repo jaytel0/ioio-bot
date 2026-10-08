@@ -22,6 +22,8 @@ export function assetResponse(request: Request) {
   if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } });
   return new Response(request.method === 'HEAD' ? null : asset[0], { headers: {
     'Content-Type': asset[1], 'Cache-Control': 'public, max-age=86400',
-    'Content-Security-Policy': asset[1] === 'video/mp4' ? `default-src 'none'; media-src ${new URL(request.url).origin}; sandbox` : "default-src 'none'; img-src data:; sandbox",
+    // Native video documents make an anonymous media request. Preserve their
+    // origin so the existing origin gate accepts it; scripts remain blocked.
+    'Content-Security-Policy': asset[1] === 'video/mp4' ? "default-src 'none'; media-src 'self'; sandbox allow-same-origin" : "default-src 'none'; img-src data:; sandbox",
   } });
 }
