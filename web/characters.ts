@@ -10,8 +10,8 @@ const clamp = (v:number) => Math.max(0,Math.min(1,v));
 function random(seed:number) { return () => {seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15,1|seed); t ^= t + Math.imul(t ^ t >>> 7,61|t); return ((t ^ t >>> 14) >>> 0)/4294967296;}; }
 function ellipse(c:Ctx,x:number,y:number,rx:number,ry:number,fill:string|CanvasGradient,angle=0){c.beginPath();c.ellipse(x,y,rx,ry,angle,0,TAU);c.fillStyle=fill;c.fill();}
 function radial(c:Ctx,x:number,y:number,r:number,stops:[number,string][]) { const g=c.createRadialGradient(x,y,0,x,y,r); for(const [p,color] of stops)g.addColorStop(p,color);return g; }
-function layer(name:string,draw:(c:Ctx)=>void){ let v=layers.get(name);if(!v){v=document.createElement('canvas');v.width=v.height=512;const c=v.getContext('2d')!;c.scale(2,2);draw(c);layers.set(name,v);}return v; }
-function paint(c:Ctx,name:string,x=0,y=0){c.drawImage(layers.get(name)!,x,y,256,256);}
+function layer(name:string,draw:(c:Ctx)=>void){ let v=layers.get(name);if(!v){v=document.createElement('canvas');v.width=v.height=608;const c=v.getContext('2d')!;c.scale(2,2);c.translate(16,16);draw(c);layers.set(name,v);}return v; }
+function paint(c:Ctx,name:string,x=0,y=0){c.drawImage(layers.get(name)!,x-16,y-16,304,304);}
 
 /** Seeded individual fibres, groomed over a curved surface. All pixels are made
  * here; no downloaded image, video, sprite sheet or raster texture is shipped. */
@@ -21,9 +21,10 @@ function fur(c:Ctx,path:Path2D,options:{seed:number;color:[number,number,number]
  // Build a shallow curved volume from the silhouette's horizontal sections.
  // Its normals light both the undercoat and each fibre, instead of a flat fill.
  const n=280,depth=new Float32Array(n*n),inside=new Uint8Array(n*n);
+ const transform=c.getTransform();
  for(let y=0;y<n;y++){
   let left=n,right=0;
-  for(let x=0;x<n;x++)if(c.isPointInPath(path,x*2,y*2)){inside[y*n+x]=1;left=Math.min(left,x);right=Math.max(right,x);}
+  for(let x=0;x<n;x++)if(c.isPointInPath(path,transform.a*x+transform.c*y+transform.e,transform.b*x+transform.d*y+transform.f)){inside[y*n+x]=1;left=Math.min(left,x);right=Math.max(right,x);}
   const mid=(left+right)/2,r=(right-left)/2;
   if(r>0)for(let x=left;x<=right;x++)depth[y*n+x]=Math.sqrt(Math.max(0,r*r-(x-mid)**2))*.74;
  }
@@ -150,6 +151,7 @@ function muse(c:Ctx,t:number){
  c.strokeStyle='#fff2d28a';c.lineWidth=.7;c.beginPath();c.moveTo(120,130);c.quadraticCurveTo(129,138,138,130);c.stroke();c.restore();c.restore();
 }
 
+const bodyBounds = new Map<Character,{cx:number;cy:number;height:number}>();
 export class CharacterRenderer {
  private c: Ctx;
  private grok=new BotEngine(83,'idle');
@@ -158,12 +160,34 @@ export class CharacterRenderer {
  constructor(readonly canvas:HTMLCanvasElement){this.c=canvas.getContext('2d')!;}
  resize(size:number){const resolution=Math.min(512,Math.max(192,Math.ceil(size*Math.min(devicePixelRatio,3))));if(this.canvas.width!==resolution){this.canvas.width=this.canvas.height=resolution;}}
  draw(kind:Character,t:number){
-  const c=this.c;c.setTransform(this.canvas.width/256,0,0,this.canvas.height/256,0,0);c.clearRect(0,0,256,256);c.fillStyle=backgrounds[kind];c.fillRect(0,0,256,256);
-  if(kind==='alfred')alfred(c,t);else if(kind==='felipe')felipe(c,t);else if(kind==='muse')muse(c,t);
-  else if(kind==='instinct'){
+  const c=this.c;c.setTransform(this.canvas.width/256,0,0,this.canvas.height/256,0,0);c.clearRect(0,0,256,256);
+  if(kind==='instinct'){
+   c.fillStyle=backgrounds.instinct;c.fillRect(0,0,256,256);
    // The approved path, at 88% of its original internal size.
    c.save();c.translate(128,128);c.scale(1.76,1.76);c.translate(-64,-64);c.fillStyle='#07100d';c.fill(new Path2D('M53 21h22c-5.2 8.2-5.9 14.7-5.9 23.4v39.2c0 8.7.7 15.2 5.9 23.4H53c5.2-8.2 5.9-14.7 5.9-23.4V44.4c0-8.7-.7-15.2-5.9-23.4Z'));c.restore();
-  }else this.drawGrok(t);
+  }else{
+   const bounds=this.bounds(kind);
+   // A .72em canvas with a 192/256 silhouette matches the o's .54em ink height.
+   c.save();c.translate(128,128);c.scale(192/bounds.height,192/bounds.height);c.translate(-bounds.cx,-bounds.cy);
+   this.drawRaw(kind,t);c.restore();
+  }
+ }
+ private drawRaw(kind:Character,t:number){
+  if(kind==='alfred')alfred(this.c,t);else if(kind==='felipe')felipe(this.c,t);else if(kind==='muse')muse(this.c,t);else this.drawGrok(t);
+ }
+ private bounds(kind:Character){
+  let bounds=bodyBounds.get(kind);
+  if(!bounds){
+   const sample=document.createElement('canvas');sample.width=sample.height=512;
+   const renderer=new CharacterRenderer(sample),c=renderer.c;
+   c.setTransform(512/320,0,0,512/320,0,0);c.translate(32,16);renderer.drawRaw(kind,0);
+   const pixels=c.getImageData(0,0,512,512).data;
+   let left=512,right=0,top=512,bottom=0;
+   for(let y=0;y<512;y++)for(let x=0;x<512;x++)if(pixels[(y*512+x)*4+3]>63){left=Math.min(left,x);right=Math.max(right,x+1);top=Math.min(top,y);bottom=Math.max(bottom,y+1);}
+   bounds={cx:(left+right)/2*320/512-32,cy:(top+bottom)/2*320/512-16,height:(bottom-top)*320/512};
+   bodyBounds.set(kind,bounds);
+  }
+  return bounds;
  }
  private drawGrok(t:number){
   if(t<this.lastGrokTime){this.grok=new BotEngine(83,'idle');this.grokState='idle';}

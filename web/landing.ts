@@ -1,5 +1,6 @@
 /*! Grok's measured animation engine: Copyright (c) 2026 Jérémy Perret, MIT. See web/vendor/bloub/LICENSE. Other character rendering is an independent reference-based recreation. */
 import { CharacterRenderer, prepareCharacters, type Character } from './characters';
+import { measureLogoSpacing, logoPositions, type LogoShape, type LogoSpacing } from './optical-spacing';
 
 type Cue = [time: number, slot: number, character: Character | null];
 const clamp = (x: number) => Math.max(0, Math.min(1, x));
@@ -12,28 +13,30 @@ function shuffle<T>(items: T[]): T[] {
  }
  return result;
 }
-// Phrase grammar keeps the ensemble coherent, while fresh slots, dwell lengths,
-// stagger intervals and exit order make each phrase different. Every phrase
-// includes all five artworks and returns to readable typography between bursts.
-function phrase() {
+// Every exchange keeps one or two characters visible, separated by letters.
+// Fresh slots, dwell lengths and artwork order vary the rhythm of each phrase.
+function phrase(current: (Character | null)[]) {
  const cues: Cue[] = [];
  const cast = shuffle<Character>(['grok', 'alfred', 'felipe', 'muse', 'instinct']);
+ const appearances = [...current];
+ const visible = new Set(current.flatMap((kind, index) => kind ? [index] : []));
  let time = between(1.5, 2.2), used = 0;
- for (const count of [2, 3, Math.random() < .5 ? 2 : 4]) {
-  const indices = shuffle([0, 1, 2, 3]).slice(0, count);
-  let entry = time;
-  for (const index of indices) {
-   cues.push([entry, index, cast[used++ % cast.length]]);
-   entry += between(.16, .39);
+ for (let exchange = 0; exchange < 12; exchange++) {
+  const entering = visible.size === 1;
+  const candidates = [0, 1, 2, 3].filter(index => entering
+   ? !visible.has(index) && !visible.has(index - 1) && !visible.has(index + 1)
+   : visible.has(index));
+  const index = shuffle(candidates)[0];
+  let kind: Character | null = null;
+  if (entering) {
+   do { kind = cast[used++ % cast.length]; } while (appearances.includes(kind));
   }
-  let exit = entry + between(1.65, 2.65);
-  for (const index of shuffle(indices)) {
-   cues.push([exit, index, null]);
-   exit += between(.12, .3);
-  }
-  time = exit + between(1.45, 2.25);
+  cues.push([time, index, kind]);
+  appearances[index] = kind;
+  if (entering) visible.add(index); else visible.delete(index);
+  time += exchange % 3 === 2 ? between(1.65, 2.65) : between(.9, 1.6);
  }
- return { cues: cues.sort((a, b) => a[0] - b[0]), duration: time + .7 };
+ return { cues, duration: time + .7 };
 }
 const brand = document.querySelector<HTMLButtonElement>('.brand-play');
 if (brand) start(brand);
@@ -44,26 +47,25 @@ function start(brand: HTMLButtonElement) {
  const canvases = slots.map(s => s.querySelector<HTMLCanvasElement>('canvas')!);
  if (canvases.some(c => !c.getContext('2d'))) return;
  const renderers = canvases.map(c => new CharacterRenderer(c));
- const states = slots.map(() => ({
-  advance: 0, velocity: 0, shown: false, next: null as Character | null,
+ const initialSlot = Math.floor(Math.random() * slots.length);
+ const states = slots.map((_, i) => ({
+  advance: 0, velocity: 0, shown: i === initialSlot, next: null as Character | null,
   kind: 'grok' as Character, since: 0, cue: -100, anticipation: .36, switched: true,
  }));
  let prepared = false, ready = false, paused = false, raf = 0, last = 0;
- let clock = 0, beat = 0, phraseStart = 0, score = phrase(), size = 180;
- let widths = [.21, .54, .21, .54];
+ const currentCast = () => states.map(s => s.shown ? s.kind : null);
+ let clock = 0, beat = 0, phraseStart = 0, score = phrase(currentCast()), size = 180;
+ let spacing: LogoSpacing;
+ const gaps = slots.slice(1).map(() => ({ advance: 0, velocity: 0 }));
  const canRun = () => ready && !paused && !reduced.matches && !document.hidden;
  function measure() {
-  size = parseFloat(getComputedStyle(brand).fontSize);
-  const previousWidths = widths;
-  widths = letters.map(letter => parseFloat(getComputedStyle(letter).width) / size);
-  states.forEach((s, i) => {
-   if (!ready) s.advance = widths[i];
-   else if (!s.shown) s.advance += widths[i] - previousWidths[i];
-  });
-  renderers.forEach(r => r.resize(size * .6));
+  const style = getComputedStyle(brand);
+  size = parseFloat(style.fontSize);
+  spacing = measureLogoSpacing(style, prepared);
+  renderers.forEach(r => r.resize(size * .72));
   layout(0);
  }
- function layout(dt: number) {
+ function layout(dt: number, snap = !ready) {
   const scales: number[] = [];
   const steps = Math.max(1, Math.ceil(dt / .008)), h = dt / steps;
   states.forEach((s, i) => {
@@ -85,20 +87,30 @@ function start(brand: HTMLButtonElement) {
     const release = p === 1 ? 1 : 1 - Math.exp(-8 * p) * (Math.cos(10 * p) + .8 * Math.sin(10 * p));
     scale = .32 + .68 * release;
    }
-   const target = (s.shown ? .665 : widths[i]) * (1 - .14 * squeeze);
+   const kind: LogoShape = s.shown ? s.kind : letters[i].textContent as 'i' | 'o';
+   const edges = spacing.edges[kind];
+   const target = (edges.right - edges.left) * (1 - .14 * squeeze);
+   if (snap) { s.advance = target; s.velocity = 0; }
    for (let step = 0; step < steps; step++) {
     s.velocity += (520 * (target - s.advance) - 38 * s.velocity) * h;
     s.advance += s.velocity * h;
    }
-   if (Math.abs(s.advance - target) < .0001 && Math.abs(s.velocity) < .001) {
-    s.advance = target; s.velocity = 0;
-   }
+   if (Math.abs(s.advance - target) < .0001 && Math.abs(s.velocity) < .001) { s.advance = target; s.velocity = 0; }
    scales.push(scale);
   });
-  const total = states.reduce((sum, s) => sum + s.advance, 0);
-  let x = -total / 2;
+  const kinds = states.map((s, i): LogoShape => s.shown ? s.kind : letters[i].textContent as 'i' | 'o');
+  gaps.forEach((g, i) => {
+   const target = .085 + spacing.corrections[kinds[i]][kinds[i + 1]];
+   if (snap) { g.advance = target; g.velocity = 0; }
+   for (let step = 0; step < steps; step++) {
+    g.velocity += (520 * (target - g.advance) - 38 * g.velocity) * h;
+    g.advance += g.velocity * h;
+   }
+   if (Math.abs(g.advance - target) < .0001 && Math.abs(g.velocity) < .001) { g.advance = target; g.velocity = 0; }
+  });
+  const positions = logoPositions(spacing, kinds, states.map(s => s.advance), gaps.map(g => g.advance));
   states.forEach((s, i) => {
-   slots[i].style.transform = `translate3d(${((x + s.advance / 2) * size).toFixed(3)}px,0,0)`;
+   slots[i].style.transform = `translate3d(${(positions[i] * size).toFixed(3)}px,0,0)`;
    // Never dissolve a letter into an image: exchange the visible artwork at the snap.
    letters[i].style.opacity = s.shown ? '0' : '1';
    canvases[i].style.opacity = s.shown ? '1' : '0';
@@ -107,7 +119,6 @@ function start(brand: HTMLButtonElement) {
    canvases[i].style.transform = transform;
    if (s.shown) renderers[i].draw(s.kind, Math.max(0, clock - s.since));
    slots[i].dataset.character = s.shown ? s.kind : '';
-   x += s.advance;
   });
  }
  function frame(now: number) {
@@ -121,7 +132,7 @@ function start(brand: HTMLButtonElement) {
    s.next = kind; s.cue = phraseStart + time; s.switched = false;
    s.anticipation = kind ? .36 : .28;
   }
-  if (local >= score.duration) { phraseStart = clock; beat = 0; score = phrase(); }
+  if (local >= score.duration) { phraseStart = clock; beat = 0; score = phrase(currentCast()); }
   if (states.some(s => s.shown || clock - s.cue < 1.4)) layout(dt);
   raf = requestAnimationFrame(frame);
  }
@@ -131,14 +142,15 @@ function start(brand: HTMLButtonElement) {
   brand.setAttribute('aria-label', reduced.matches ? 'ioio' : paused ? 'Play logo animation' : 'Pause logo animation');
   brand.disabled = reduced.matches;
   if (reduced.matches) {
-   clock = 0; phraseStart = 0; beat = 0; score = phrase();
-   states.forEach((s, i) => { s.advance = widths[i]; s.velocity = 0; s.shown = false; s.next = null; s.cue = -100; s.switched = true; });
-   layout(0);
+   clock = 0; phraseStart = 0; beat = 0;
+   states.forEach((s, i) => { s.shown = i === initialSlot; s.kind = 'grok'; s.since = 0; s.velocity = 0; s.next = null; s.cue = -100; s.switched = true; });
+   score = phrase(currentCast());
+   layout(0, true);
   } else if (canRun()) raf = requestAnimationFrame(frame);
  }
  brand.addEventListener('click', () => { paused = !paused; update(); });
  document.addEventListener('visibilitychange', update);
- reduced.addEventListener('change', () => { if (!reduced.matches && !prepared) prepare(); update(); });
+ reduced.addEventListener('change', () => { if (!reduced.matches && !prepared) { prepare(); measure(); } update(); });
  new ResizeObserver(() => { if (ready) measure(); }).observe(brand);
  function prepare() { if (prepared) return; prepareCharacters(); prepared = true; }
  document.fonts.ready.then(() => {

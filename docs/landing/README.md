@@ -18,7 +18,8 @@ integration-test fixture. Do not change production origin/security checks for pr
   canvases cache generated fibres; no source media is loaded by the landing page.
 - `web/vendor/bloub`: pinned MIT Grok geometry/animation engine; upstream license
   and measurement notes included. Only idle and wink are selected by ioio.
-- `web/landing.ts`: varied phrases with coordinated bursts and typography rests,
+- `web/landing.ts`: varied phrases that always mix one or two characters with letters between them,
+  with no duplicate characters visible together (the two different Dots are allowed),
   one shared animation clock, spring positions and interruption-safe pause/resume.
   Each exchange anticipates for 360 ms (280 ms on exit), compressing with a
   quartic acceleration before a discrete artwork swap and a 420 ms spring-like
@@ -27,18 +28,24 @@ integration-test fixture. Do not change production origin/security checks for pr
   TypeScript string, retaining the full bloub license. It stays in the existing
   nonce-authorized script; CSP and authentication are unchanged.
 
-The button has a fixed stage width. Letter and character centers are computed
-from continuous spring advances and moved using transforms; layout width is
-never animated. The visible word stays tightly kerned and centered. Each tile
-is .6em square with identical rounded corners; Instinct's original internal path
-is scaled to 88%. Typeface and landing copy are unchanged.
+The button has a fixed stage width. `web/optical-spacing.ts` measures the loaded
+Inter glyph contours and each character silhouette, then corrects each pairing
+for its visible whitespace. Spacing starts at .085em, with half the contour-area
+correction to bring curved letters closer without crowding them. Slot widths
+retain the original 14% anticipation compression and 520/38 position spring;
+pair-spacing adjustments use that same spring. Settled visible edges stay centered.
+Positions move using transforms; layout width is never animated. Grok, Muse and
+both Dots have transparent backgrounds; their measured bodies match the o's
+.54em ink height. Only Instinct retains its .54em rounded tile and original
+internal path scaled to 88%. The typeface is unchanged. The tagline is
+“Your agents and your friends’ agents, connected.”
 
 Click/tap or Space/Enter pauses the entire clock, including eye and hand motion.
 Hidden documents cancel animation frames and resume without a time jump.
-Reduced motion resets to static typography, disables the animation button and
+Reduced motion shows static letters with one Grok character, disables the animation button and
 skips fur generation at first load. A JavaScript or Canvas failure leaves the
-ordinary typography visible. Font measurement is repeated after resizing using
-untransformed layout widths, so a mid-animation resize does not corrupt spacing.
+ordinary typography visible. Measurements use em units and are cached by typeface;
+resizing updates the display size without reading transformed letter bounds.
 
 ## Review evidence
 
