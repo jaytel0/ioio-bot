@@ -34,6 +34,16 @@ export class Store {
     `);
     if (!sql.exec('PRAGMA table_info(invites)').toArray().some(column => column.name === 'credential_ttl_seconds')) sql.exec('ALTER TABLE invites ADD COLUMN credential_ttl_seconds INTEGER');
     if (!sql.exec('PRAGMA table_info(subscriptions)').toArray().some(column => column.name === 'event_name')) sql.exec("ALTER TABLE subscriptions ADD COLUMN event_name TEXT NOT NULL DEFAULT 'btb.message.created'");
+    if (!sql.exec('PRAGMA table_info(agents)').toArray().some(column => column.name === 'encryption_key')) sql.exec('ALTER TABLE agents ADD COLUMN encryption_key TEXT');
+    if (!sql.exec('PRAGMA table_info(messages)').toArray().some(column => column.name === 'content_digest')) sql.exec('ALTER TABLE messages ADD COLUMN content_digest TEXT');
+    if (!this.one("SELECT 1 FROM recovery_state WHERE key = 'privacy-e2ee-v1'")) {
+      // Never carry readable legacy conversations into the encrypted transport.
+      this.run('UPDATE messages SET text = NULL, data = NULL');
+      this.run("UPDATE connections SET reason = ''");
+      this.run('UPDATE deliveries SET acked = 1');
+      this.run("DELETE FROM limits WHERE key LIKE 'claim:%' OR key LIKE 'register:%'");
+      this.run("INSERT INTO recovery_state VALUES ('privacy-e2ee-v1', 'complete')");
+    }
     sql.exec("INSERT OR IGNORE INTO rooms VALUES ('home', 'home', 'My agents')");
     sql.exec("INSERT OR IGNORE INTO webhook_hosts VALUES ('chatgpt.com'), ('api.openai.com')");
   }
@@ -42,7 +52,8 @@ export class Store {
   run(query: string, ...values: SqlStorageValue[]) { this.sql.exec(query, ...values); }
   export() {
     const tables = ['accounts', 'setup_links', 'agent_activity', 'friendships', 'agents', 'google_owners', 'tokens', 'invites', 'rooms', 'members', 'connections', 'messages', 'deliveries', 'subscriptions', 'outbox', 'webhook_hosts'];
-    return Object.fromEntries(tables.map(table => [table, this.all(`SELECT * FROM ${table}`)]));
+    // Recovery preserves identity/routing, never queued communication content.
+    return Object.fromEntries(tables.map(table => [table, this.all(`SELECT * FROM ${table}`).map(row => table === 'messages' ? { ...row, text: null, data: null } : table === 'deliveries' ? { ...row, acked: 1 } : row)]));
   }
   restore(tables: Record<string, Row[]>) {
     const allowed = Object.keys(this.export());
@@ -54,7 +65,13 @@ export class Store {
       for (const original of tables[table]) {
         // Backups made before expiring enrollment preserve their permanent-key default.
         const compatible = table === 'subscriptions' && !Object.hasOwn(original, 'event_name') ? { ...original, event_name: 'btb.message.created' } : original;
-        const row = table === 'invites' && !Object.hasOwn(original, 'credential_ttl_seconds') ? { ...original, credential_ttl_seconds: null } : compatible;
+        let row = table === 'invites' && !Object.hasOwn(original, 'credential_ttl_seconds') ? { ...original, credential_ttl_seconds: null } : compatible;
+        if (table === 'agents' && !Object.hasOwn(row, 'encryption_key')) row = { ...row, encryption_key: null };
+        if (table === 'messages') row = { ...row, text: null, data: null };
+        if (table === 'messages' && !Object.hasOwn(row, 'content_digest')) row = { ...row, content_digest: null };
+        if (table === 'deliveries') row = { ...row, acked: 1 };
+        if (table === 'connections') row = { ...row, reason: '' };
+        if (table === 'google_owners') row = { ...row, email: '' };
         const keys = Object.keys(row);
         if (keys.length !== columns.length || keys.some(key => !columns.includes(key))) throw new Error('Invalid backup row');
         this.run(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, ...keys.map(key => row[key]));

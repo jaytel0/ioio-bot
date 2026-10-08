@@ -25,7 +25,7 @@ export async function serve(request: Request, env: Env, ctx: ExecutionContext): 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}), 'Vary': 'Origin', 'Access-Control-Allow-Headers': 'Authorization,Content-Type,MCP-Protocol-Version,Mcp-Session-Id', 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS' } });
     // Bound chunked bodies before OAuth, JSON parsing, or database access.
     if (request.body) {
-      const limit = path === '/admin/restore' ? 8 * 1024 * 1024 : path === '/oauth/token' ? 8192 : 32768;
+      const limit = path === '/admin/restore' ? 8 * 1024 * 1024 : path === '/oauth/token' ? 8192 : path === '/v1/messages' || path === '/mcp' ? 1024 * 1024 : 32768;
       request = new Request(request, { body: await readLimitedText(request, limit) });
     }
     const asset = assetResponse(request);

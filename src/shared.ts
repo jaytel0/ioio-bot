@@ -32,17 +32,23 @@ export async function readLimitedText(r: Request, limit = 32768) {
   const bytes = new Uint8Array(size); let at = 0; for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; }
   return new TextDecoder().decode(bytes);
 }
-export async function body(r: Request) { const text = await readLimitedText(r); try { return JSON.parse(text); } catch { throw new ApiError(400, 'Invalid JSON'); } }
+export async function body(r: Request, limit = 32768) { const text = await readLimitedText(r, limit); try { return JSON.parse(text); } catch { throw new ApiError(400, 'Invalid JSON'); } }
 export const idSchema = z.string().regex(/^A-\d{3}-\d{3}-\d{3}$/);
 export const pushSchema = z.object({ url: z.string().url(), secret: z.string(), directed_only: z.boolean().default(true) }).strict();
+const hexKey = z.string().regex(/^[a-f0-9]{64}$/);
+export const encryptionKeySchema = z.object({ public_key: hexKey, signature: z.string().regex(/^[a-f0-9]{128}$/) }).strict();
+export const encryptedEnvelopeSchema = z.object({
+  format: z.literal('ioio-e2ee-v1'), sender_key: hexKey,
+  recipients: z.record(idSchema, z.object({ key: hexKey, ciphertext: z.string().min(64).max(44000).regex(/^[A-Za-z0-9+/]+={0,2}$/) }).strict()).refine(v => Object.keys(v).length > 0 && Object.keys(v).length <= 100, 'Invalid encrypted recipients')
+}).strict();
 export const sendSchema = z.object({
   to: idSchema.optional(), room: z.string().min(1).max(80).optional(),
-  text: z.string().max(12000).optional(), data: z.record(z.string(), z.unknown()).optional(),
+  encrypted: encryptedEnvelopeSchema,
   kind: z.enum(['message', 'request', 'response', 'status']).default('message'),
-  thread_id: z.string().uuid().optional(), reply_to: z.number().int().positive().optional(),
+  thread_id: z.string().uuid(), reply_to: z.number().int().positive().optional(),
   mentions: z.array(idSchema).max(20).default([]), client_message_id: z.string().min(1).max(100),
   hop_count: z.number().int().min(0).max(8).default(0)
-}).strict().refine(v => Boolean(v.to) !== Boolean(v.room), 'Choose exactly one of to or room').refine(v => Boolean(v.text?.trim()) || v.data !== undefined, 'Provide text or data');
+}).strict().refine(v => Boolean(v.to) !== Boolean(v.room), 'Choose exactly one of to or room');
 export const inviteSchema = z.object({ name: z.string().trim().min(1).max(60), capabilities: z.array(z.string().max(120)).max(30).default([]), agent_id: idSchema.optional(), credential_ttl_seconds: z.number().int().min(1).max(86400).optional() }).strict();
 export const eventName = 'ioio.message.created';
 export const eventDefinition = {

@@ -32,13 +32,38 @@ export async function createBackup(env: Env) {
   } while (cursor);
   const exported_at = now(), payload = { ...snapshot, exported_at, oauth };
   requireThat(new TextEncoder().encode(JSON.stringify(payload)).length <= 8 * 1024 * 1024, 503, 'Backup exceeds the current 8 MiB restore limit; expand recovery before continuing');
+  await purgeLegacyBackups(env);
   const envelope = await sealBackup(payload, env.BACKUP_ENCRYPTION_KEY);
-  const key = 'btb/' + exported_at.replace(/:/g, '-') + '.json', encoded = JSON.stringify(envelope);
+  const key = 'btb-private/' + exported_at.replace(/:/g, '-') + '.json', encoded = JSON.stringify(envelope);
   await env.BACKUPS.put(key, encoded, { httpMetadata: { contentType: 'application/json' } });
   const stored = await env.BACKUPS.get(key); requireThat(stored && equal(await stored.text(), encoded), 503, 'Backup storage verification failed');
   await env.OAUTH_KV.put('backup-status', JSON.stringify({ key, exported_at, status: 'ok' }));
   console.log(JSON.stringify({ event: 'backup_success', key, bytes: encoded.length }));
   return { key, exported_at, encrypted: true, verified: true };
+}
+export async function purgeLegacyBackups(env: Env) {
+  // Old service-key encrypted backups can be decrypted by the operator. New
+  // backups contain identity/routing records only, under a separate prefix.
+  let deleted = 0;
+  for (;;) {
+    const page = await env.BACKUPS.list({ prefix: 'btb/', limit: 100 });
+    if (!page.objects.length) break;
+    await env.BACKUPS.delete(page.objects.map(object => object.key));
+    deleted += page.objects.length;
+  }
+  return { deleted_legacy_backups: deleted };
+}
+export async function purgeLegacySessions(env: Env) {
+  let deleted = 0;
+  for (const prefix of ['owner-session:', 'agent-selection:']) {
+    let cursor: string | undefined;
+    do {
+      const page = await env.OAUTH_KV.list({ prefix, cursor, limit: 100 });
+      for (const entry of page.keys) { await env.OAUTH_KV.delete(entry.name); deleted++; }
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+  }
+  return { deleted_legacy_browser_sessions: deleted };
 }
 export async function restoreBackup(env: Env, snapshot: Row) {
   requireThat(snapshot.version === 2 && snapshot.canonical_url === env.BTB_BASE_URL && Array.isArray(snapshot.oauth), 400, 'Invalid backup or canonical URL');

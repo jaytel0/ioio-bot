@@ -2,8 +2,9 @@
 import { readFile, mkdir, chmod, open, rename, link, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import WebSocket from 'ws';
+import { createIdentity, validateIdentity, fingerprint, keyRegistration, trustPeer, trustRoom, prepareMessage, decryptResult, decryptMessage } from './e2ee.mjs';
 
 const args = process.argv.slice(2), command = args.shift() ?? 'help';
 const flags = {}, positional = [];
@@ -33,6 +34,27 @@ async function request(path, input, ownerAuth = false, anonymous = false) {
   const result = await response.json(); if (!response.ok) throw new Error(`${response.status}: ${result.error || JSON.stringify(result)}`); return result;
 }
 const print = value => process.stdout.write(JSON.stringify(value, null, 2) + '\n');
+let sending = Promise.resolve();
+function encryptedSend(input) {
+  const pending = sending.then(() => sendEncrypted(input));
+  sending = pending.catch(() => {});
+  return pending;
+}
+async function sendEncrypted(input) {
+  validateIdentity(agent.encryption);
+  const canonical = value => Array.isArray(value) ? '['+value.map(canonical).join(',')+']' : value !== null && typeof value === 'object' ? '{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+canonical(value[key])).join(',')+'}' : JSON.stringify(value);
+  const digest = createHash('sha256').update(canonical({ server, ...input })).digest('hex');
+  const cache = agent.encryption.outgoing ?? {};
+  const existing = cache[input.client_message_id];
+  if (existing && existing.digest !== digest) throw new Error('client_message_id was already used for a different message');
+  const prepared = existing?.envelope ?? await prepareMessage(agent.encryption, server, agent.agent.id, input, request);
+  if (!existing) {
+    agent.encryption.outgoing = Object.fromEntries([...Object.entries(cache).slice(-49), [prepared.client_message_id, { digest, envelope: prepared }]]);
+    await save(agentFile, agent);
+  }
+  return decryptResult(agent.encryption, server, agent.agent.id, await request('/v1/messages', prepared));
+}
+const privateResult = result => decryptResult(agent.encryption, server, agent.agent.id, result);
 try {
   switch (command) {
     case 'owner-init': {
@@ -57,17 +79,38 @@ try {
       print({ agent: result.agent, saved: agentFile, owner_saved: guestOwnerFile, expires: false }); break;
     }
     case 'whoami': print(await request('/v1/me')); break;
+    case 'privacy-init': {
+      if (!agent.token) throw new Error('Pair this profile first');
+      const me = await request('/v1/me');
+      // Save locally before publishing: a retry must never silently rotate keys.
+      if (!agent.encryption) { agent.encryption = createIdentity(); agent.agent = me; await save(agentFile, agent); }
+      validateIdentity(agent.encryption);
+      await request('/v1/encryption-key', keyRegistration(agent.encryption, server, me.id));
+      print({ agent: me.id, fingerprint: fingerprint(agent.encryption.public_key), saved: agentFile }); break;
+    }
+    case 'fingerprint': { validateIdentity(agent.encryption); print({ agent: agent.agent.id, fingerprint: fingerprint(agent.encryption.public_key) }); break; }
+    case 'trust': {
+      const peer = (await request('/v1/agents')).agents.find(candidate => candidate.id === positional[0]);
+      if (!peer?.encryption_key) throw new Error('Recipient has not initialized endpoint encryption');
+      trustPeer(agent.encryption, peer.id, peer.encryption_key, positional[1]); await save(agentFile, agent);
+      print({ trusted: peer.id, fingerprint: fingerprint(peer.encryption_key) }); break;
+    }
+    case 'trust-room': {
+      if (!positional[0] || positional.length < 2) throw new Error('Provide a room and its independently verified intended member numbers');
+      trustRoom(agent.encryption, positional[0], positional.slice(1), agent.agent.id); await save(agentFile, agent);
+      print({ room: positional[0], approved_members: agent.encryption.rooms[positional[0]] }); break;
+    }
     case 'agents': print(await request('/v1/agents')); break;
     case 'rooms': print(await request('/v1/rooms')); break;
     case 'receiving': print(await request('/v1/receiving' + (positional[0] ? '?agent_id=' + encodeURIComponent(positional[0]) : ''))); break;
     case 'delivery': print(await request('/v1/messages/' + encodeURIComponent(positional[0]) + '/delivery')); break;
-    case 'inbox': print(await request('/v1/inbox', { after: Number(flags.after || 0), limit: Number(flags.limit || 50), include_acked: Boolean(flags.history), directed_only: Boolean(flags.directed) })); break;
+    case 'inbox': print(privateResult(await request('/v1/inbox', { after: Number(flags.after || 0), limit: Number(flags.limit || 50), include_acked: Boolean(flags.history), directed_only: Boolean(flags.directed) }))); break;
     case 'ack': print(await request('/v1/ack', { message_ids: positional.map(Number) })); break;
     case 'send': {
       const text = positional.slice(flags.room ? 0 : 1).join(' ');
-      print(await request('/v1/messages', { ...(flags.room ? { room: flags.room } : { to: positional[0] }), ...(text ? { text } : {}), ...(flags.json ? { data: JSON.parse(flags.json) } : {}), kind: flags.kind || 'message', client_message_id: flags.key || randomUUID(), mentions: flags.mentions ? flags.mentions.split(',') : [], ...(flags.reply ? { reply_to: Number(flags.reply) } : {}) })); break;
+      print(await encryptedSend({ ...(flags.room ? { room: flags.room } : { to: positional[0] }), ...(text ? { text } : {}), ...(flags.json ? { data: JSON.parse(flags.json) } : {}), kind: flags.kind || 'message', client_message_id: flags.key || randomUUID(), mentions: flags.mentions ? flags.mentions.split(',') : [], ...(flags.reply ? { reply_to: Number(flags.reply) } : {}) })); break;
     }
-    case 'connect': print(await request('/v1/connections', { to: positional[0], reason: positional.slice(1).join(' ') || 'Request permission to communicate' })); break;
+    case 'connect': { if (positional.length > 1) throw new Error('Connection requests cannot contain plaintext notes. Send an encrypted message after approval.'); print(await request('/v1/connections', { to: positional[0] })); break; }
     case 'approve': case 'reject': case 'disconnect': print(await request('/admin/connections/decide', { request_id: positional[0], decision: { approve: 'accepted', reject: 'rejected', disconnect: 'revoked' }[command] }, true)); break;
     case 'oauth-approve': throw new Error('Open /owner and connect the agent through Google sign-in; CLI approval codes are no longer used.');
     case 'revoke': print(await request('/admin/revoke', { agent_id: positional[0] }, true)); break;
@@ -76,12 +119,13 @@ try {
     case 'backup': { const path = positional[0]; if (!path) throw new Error('Provide an output filename'); await save(path, await request('/admin/export', undefined, true)); print({ saved: path, sensitive: true }); break; }
     case 'watch': {
       if (!agent.token) throw new Error('Pair this profile first');
+      validateIdentity(agent.encryption);
       let delay = 250, stopped = false, socket, timer;
       async function open() {
         if (stopped) return;
         socket = new WebSocket(server.replace(/^http/, 'ws') + '/v1/stream', { headers: { Authorization: `Bearer ${agent.token}` } });
-        socket.on('open', async () => { delay = 250; try { print({ type: 'catchup', ...await request('/v1/inbox', {}) }); } catch (error) { process.stderr.write(error.message + '\n'); } });
-        socket.on('message', data => { if (data.toString() !== 'pong') process.stdout.write(data + '\n'); });
+        socket.on('open', async () => { delay = 250; try { print({ type: 'catchup', ...privateResult(await request('/v1/inbox', {})) }); } catch (error) { process.stderr.write(error.message + '\n'); } });
+        socket.on('message', data => { if (data.toString() === 'pong') return; try { const event = JSON.parse(data); print(event.type === 'message' ? { ...event, message: decryptMessage(agent.encryption, server, agent.agent.id, event.message) } : event); } catch (error) { process.stderr.write(error.message + '\n'); } });
         socket.on('error', () => {});
         socket.on('unexpected-response', (_, response) => { if ([401, 403].includes(response.statusCode)) { stopped = true; process.stderr.write('Credential revoked; listener stopped.\n'); } socket.terminate(); });
         socket.on('close', () => { if (!stopped) { timer = setTimeout(open, delay); delay = Math.min(delay * 2, 30000); } });
@@ -91,6 +135,7 @@ try {
     }
     case 'mcp': {
       if (!agent.token) throw new Error('Pair this profile first');
+      validateIdentity(agent.encryption);
       const { Client, StreamableHTTPClientTransport } = await import('@modelcontextprotocol/client');
       const { McpServer, fromJsonSchema } = await import('@modelcontextprotocol/server');
       const { serveStdio } = await import('@modelcontextprotocol/server/stdio');
@@ -99,11 +144,21 @@ try {
       const catalog = await remote.listTools();
       serveStdio(() => {
         const local = new McpServer({ name: 'ioio', version: '0.1.0' }, { instructions: remote.getInstructions() });
-        for (const tool of catalog.tools) local.registerTool(tool.name, { description: tool.description, inputSchema: fromJsonSchema(tool.inputSchema), ...(tool.outputSchema ? { outputSchema: fromJsonSchema(tool.outputSchema) } : {}), annotations: tool.annotations, _meta: tool._meta }, async input => remote.callTool({ name: tool.name, arguments: input }));
+        for (const tool of catalog.tools) {
+          const sendSchema = { type: 'object', properties: { to: { type: 'string' }, room: { type: 'string' }, text: { type: 'string', maxLength: 12000 }, data: { type: 'object', additionalProperties: true }, kind: { enum: ['message','request','response','status'] }, thread_id: { type: 'string', format: 'uuid' }, reply_to: { type: 'integer', minimum: 1 }, client_message_id: { type: 'string', minLength: 1, maxLength: 100 }, mentions: { type: 'array', items: { type: 'string' }, maxItems: 20 }, hop_count: { type: 'integer', minimum: 0, maximum: 8 } }, required: ['client_message_id'], additionalProperties: false };
+          local.registerTool(tool.name, { description: tool.name === 'ioio_send' ? 'Send text or JSON encrypted locally to independently verified recipients. Plaintext and private keys never go to IO. '+tool.description : tool.description, inputSchema: fromJsonSchema(tool.name === 'ioio_send' ? sendSchema : tool.inputSchema), ...(tool.outputSchema ? { outputSchema: fromJsonSchema(tool.outputSchema) } : {}), annotations: tool.annotations, _meta: tool._meta }, async input => {
+            try {
+              if (tool.name === 'ioio_send') { const output = await encryptedSend(input); return { content: [{ type: 'text', text: JSON.stringify(output) }], structuredContent: output }; }
+              const result = await remote.callTool({ name: tool.name, arguments: input });
+              if (!result.isError && ['ioio_inbox','ioio_thread'].includes(tool.name)) { const output = privateResult(result.structuredContent ?? JSON.parse(result.content[0].text)); return { ...result, content: [{ type:'text', text:JSON.stringify(output) }], structuredContent:output }; }
+              return result;
+            } catch (error) { return { isError: true, content: [{ type: 'text', text: error.message }] }; }
+          });
+        }
         return local;
       });
       process.stdin.on('end', () => remote.close()); break;
     }
-    default: process.stdout.write(`ioio — durable bot-to-bot messaging\n\nOwner: owner-init, owner-server, agent-create NAME, invite NAME --agent NUMBER, state, approve REQUEST_ID, reject REQUEST_ID, disconnect REQUEST_ID, revoke NUMBER, backup FILE\nAgent: pair CODE, register NAME, whoami, agents, rooms, receiving [NUMBER], delivery MESSAGE_ID, inbox, ack ID..., send NUMBER TEXT, send TEXT --room home, connect NUMBER REASON, watch, mcp\nOptions: --profile NAME, --server URL, --config FILE, --owner-file FILE\nTokens are saved in private files, never printed. Pairing codes expire after 15 minutes; established credentials do not expire.\n`);
+    default: process.stdout.write(`ioio — end-to-end encrypted agent messaging\n\nOwner: owner-init, owner-server, agent-create NAME, invite NAME --agent NUMBER, state, approve REQUEST_ID, reject REQUEST_ID, disconnect REQUEST_ID, revoke NUMBER, backup FILE\nAgent: pair CODE, register NAME, privacy-init, fingerprint, trust NUMBER VERIFIED_FINGERPRINT, trust-room ROOM NUMBER..., whoami, agents, rooms, receiving [NUMBER], delivery MESSAGE_ID, inbox, ack ID..., send NUMBER TEXT, send TEXT --room home, connect NUMBER, watch, mcp\nOptions: --profile NAME, --server URL, --config FILE, --owner-file FILE\nPrivate keys stay in the endpoint profile. Verify peers through an independent trusted channel before using trust. Direct hosted MCP cannot encrypt or decrypt messages for you.\n`);
   }
 } catch (error) { process.stderr.write(error.message + '\n'); process.exitCode = 1; }

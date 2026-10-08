@@ -10,9 +10,11 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import WebSocket from 'ws';
 import { build } from 'esbuild';
+import { createIdentity, fingerprint, trustPeer, trustRoom, keyRegistration, encryptMessage, decryptResult } from '../bin/e2ee.mjs';
 
 const base = 'http://127.0.0.1:8798', admin = 'integration-owner', directory = await mkdtemp(join(tmpdir(), 'btb-test-'));
 let worker, logs = '', dot, grok, muse, guest, sent;
+const endpointKeys = new Map(), tokenAgents = new Map(), outgoing = new Map();
 const configFile = join(directory, 'wrangler.json');
 const fixtureFile = join(directory, 'entry.ts');
 async function start() {
@@ -24,8 +26,39 @@ async function start() {
 }
 async function stop() { if (worker?.pid) { const exited = once(worker, 'exit'); process.kill(-worker.pid, 'SIGTERM'); await exited; worker = undefined; } }
 async function api(path, input, token = admin, expected = 200) {
+  let original = input;
+  if (path === '/v1/messages' && input && !input.encrypted) {
+    const selfId = tokenAgents.get(token) ?? (await api('/v1/me', undefined, token)).id;
+    const sender = await testIdentity(selfId);
+    let recipients;
+    if (input.to) recipients = [input.to];
+    else recipients = ((await api('/v1/rooms', undefined, token)).rooms.find(room => room.id === input.room)?.participants ?? [{ id: dot.agent.id }]).map(agent => agent.id).filter(id => id !== selfId);
+    const peers = [];
+    for (const id of recipients) { const identity = await testIdentity(id); trustPeer(sender,id,identity.public_key,fingerprint(identity.public_key)); peers.push({id,encryption_key:identity.public_key}); }
+    if(input.room) { for(const id of [...recipients,selfId]) { const identity=endpointKeys.get(id); for(const member of [...recipients,selfId]) { const peer=endpointKeys.get(member); trustPeer(identity,member,peer.public_key,fingerprint(peer.public_key)); } trustRoom(identity,input.room,[...recipients,selfId],id); } } // fixture explicitly approves its known test-only membership
+    const route = {...input};
+    if (route.reply_to) { const parent = await api('/v1/messages/'+route.reply_to,undefined,token); route.thread_id ??= parent.thread_id; route.hop_count = parent.hop_count+1; }
+    const canonical = value => Array.isArray(value) ? '['+value.map(canonical).join(',')+']' : value && typeof value==='object' ? '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}' : JSON.stringify(value);
+    const cacheKey = selfId+':'+input.client_message_id, cached = outgoing.get(cacheKey);
+    if (cached && cached.input === canonical(input)) input = cached.envelope;
+    else { input=encryptMessage(sender,base,selfId,route,peers); if(!cached) outgoing.set(cacheKey,{input:canonical(original),envelope:input}); }
+  }
   const r = await fetch(base + path, { method: input === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: input === undefined ? undefined : JSON.stringify(input) });
-  const text = await r.text(); const result = text ? JSON.parse(text) : {}; assert.equal(r.status, expected, JSON.stringify(result)); return result;
+  const text = await r.text(); let result = text ? JSON.parse(text) : {}; assert.equal(r.status, expected, JSON.stringify(result));
+  if (result.token && result.agent && !path.startsWith('/__test/recovered')) { tokenAgents.set(result.token,result.agent.id); await testIdentity(result.agent.id); }
+  const selfId = tokenAgents.get(token);
+  if (selfId && r.ok && (result.from || result.messages)) {
+    const identity=await testIdentity(selfId);
+    for(const message of result.messages??(result.from?[result]:[])) { const peer=endpointKeys.get(message.from); if(peer) trustPeer(identity,message.from,peer.public_key,fingerprint(peer.public_key)); }
+    result=decryptResult(identity,base,selfId,result);
+  }
+  return result;
+}
+async function testIdentity(id) {
+  if (endpointKeys.has(id)) return endpointKeys.get(id);
+  const identity=createIdentity(); endpointKeys.set(id,identity);
+  const response=await fetch(base+'/__test/key',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+admin},body:JSON.stringify({id,...keyRegistration(identity,base,id)})});
+  assert.equal(response.status,200); return identity;
 }
 async function enroll(name) { const inv = await api('/admin/invites', { name }, admin, 201); const agent = await api('/v1/claim', { code: inv.code }, '', 201); assert.equal(agent.expires_at, null); return agent; }
 async function client(token, modern = false) {
@@ -69,6 +102,7 @@ export default { async fetch(request, env, ctx) {
       return Response.json({token,csrf,handle});
     }
     if (url.pathname === '/__test/google-owner') { const input = await request.json(); return Response.json(await hub.googleOwner(input.subject,input.email)); }
+    if (url.pathname === '/__test/key') { const {id,...input}=await request.json(); return Response.json(await hub.registerEncryptionKey(id,input)); }
     if (url.pathname === '/__test/strict-gate') { const gate=env.REQUEST_GATES.get(env.REQUEST_GATES.idFromName('strict-fixture')); return Response.json(await Promise.all([gate.consume(true,{requests:2,auth:2}),gate.consume(true,{requests:2,auth:2}),gate.consume(true,{requests:2,auth:2})])); }
     if (url.pathname === '/__test/edge-deny') return serve(new Request(env.BTB_BASE_URL+'/v1/me'), {...env,EDGE_RATE_LIMITER:{limit:async()=>({success:false})},HUB:{get:()=>{throw new Error('Database reached')}}},ctx);
     if (url.pathname === '/__test/restore') return restoreBackup({...env,OAUTH_KV:env.RECOVERY_KV,HUB:{idFromName:()=>env.HUB.idFromName('restore-fixture'),get:id=>env.HUB.get(id)}},await request.json());
@@ -113,6 +147,28 @@ test('temporary enrollment expires across REST and MCP while preserving the agen
 test('agent tokens stored only as hashes', async () => { const backup = await api('/admin/export'); assert(!JSON.stringify(backup).includes(dot.token)); assert(!JSON.stringify(backup).includes(guest.owner_token)); });
 test('guests cannot discover private agents or rooms', async () => { const list = await api('/v1/agents', undefined, guest.token); assert.deepEqual(list.agents.map(a => a.id), [guest.agent.id]); assert.deepEqual((await api('/v1/rooms', undefined, guest.token)).rooms, []); });
 test('direct messages preserve structured values exactly and stay private', async () => { sent = await api('/v1/messages', { to: grok.agent.id, data: { slots: ['2026-10-08T18:00:00-04:00'], cost: 0, available: false }, client_message_id: 'direct-once' }, dot.token, 201); const inbox = await api('/v1/inbox', {}, grok.token); assert.deepEqual(inbox.messages[0].data, { slots: ['2026-10-08T18:00:00-04:00'], cost: 0, available: false }); assert.equal((await api('/v1/inbox', {}, muse.token)).messages.length, 0); });
+test('raw REST and remote MCP reject plaintext; transport, exports and logs reveal no content', async () => {
+  const privateText='privacy fixture: message content must stay endpoint-only';
+  const raw=await fetch(base+'/v1/messages',{method:'POST',headers:{Authorization:'Bearer '+dot.token,'Content-Type':'application/json'},body:JSON.stringify({to:grok.agent.id,text:privateText,client_message_id:randomUUID()})});
+  assert.equal(raw.status,400); assert(!(await raw.text()).includes(privateText));
+  const c=await client(dot.token);
+  try { const failed=await c.callTool({name:'ioio_send',arguments:{to:grok.agent.id,text:privateText,client_message_id:randomUUID()}}); assert.equal(failed.isError,true); assert(!JSON.stringify(failed).includes(privateText)); } finally { await c.close(); }
+  const note=await fetch(base+'/v1/connections',{method:'POST',headers:{Authorization:'Bearer '+guest.token,'Content-Type':'application/json'},body:JSON.stringify({to:grok.agent.id,reason:privateText})}); assert.equal(note.status,400);
+  const delivered=await api('/v1/messages',{to:grok.agent.id,text:privateText,client_message_id:randomUUID()},dot.token,201);
+  const response=await fetch(base+'/v1/inbox',{method:'POST',headers:{Authorization:'Bearer '+grok.token,'Content-Type':'application/json'},body:'{}'}),wire=await response.json();
+  const message=wire.messages.find(item=>item.id===delivered.id); assert(message.encrypted); assert.equal(message.text,null); assert.equal(message.data,null);
+  assert(!JSON.stringify(wire).includes(privateText)); assert.deepEqual(Object.keys(message.encrypted.recipients),[grok.agent.id]);
+  const exported=await api('/admin/export'); assert(exported.tables.messages.every(item=>item.text===null&&item.data===null)); assert(!JSON.stringify(exported).includes(privateText));
+  assert(!logs.includes(privateText));
+  await api('/v1/ack',{message_ids:[delivered.id]},grok.token);
+  const removed=await api('/v1/messages/'+delivered.id,undefined,dot.token); assert.equal(removed.encrypted,undefined); assert.equal(removed.content_unavailable,true);
+});
+test('encryption identities require possession proof and cannot be replaced even with a valid agent token', async () => {
+  const attacker=createIdentity(); await api('/v1/encryption-key',{public_key:attacker.public_key,signature:'00'.repeat(64)},dot.token,409);
+  await api('/v1/encryption-key',{public_key:endpointKeys.get(dot.agent.id).public_key,signature:'00'.repeat(64)},dot.token,403);
+  await api('/v1/encryption-key',keyRegistration(attacker,base,dot.agent.id),dot.token,409);
+  await api('/v1/encryption-key',keyRegistration(endpointKeys.get(dot.agent.id),base,grok.agent.id),dot.token,403);
+});
 test('retries are idempotent even when sent concurrently', async () => { const input = { to: grok.agent.id, text: 'one delivery', client_message_id: randomUUID() }; const results = await Promise.all([0, 1, 2].map(() => api('/v1/messages', input, dot.token, 201))); assert.equal(new Set(results.map(r => r.id)).size, 1); });
 test('idempotency keys reject changed messages and accept equivalent JSON key order', async () => { await api('/v1/messages', { to: grok.agent.id, data: { slots: [], cost: 1, available: true }, client_message_id: 'direct-once' }, dot.token, 409); const same = await api('/v1/messages', { to: grok.agent.id, data: { available: false, cost: 0, slots: ['2026-10-08T18:00:00-04:00'] }, client_message_id: 'direct-once' }, dot.token, 201); assert.equal(same.id, sent.id); });
 test('reads retain messages until explicit acknowledgement', async () => { const first = await api('/v1/inbox', {}, grok.token), second = await api('/v1/inbox', {}, grok.token); assert.deepEqual(first, second); await api('/v1/ack', { message_ids: [sent.id] }, grok.token); assert(!(await api('/v1/inbox', {}, grok.token)).messages.some(m => m.id === sent.id)); assert((await api('/v1/inbox', { include_acked: true }, grok.token)).messages.some(m => m.id === sent.id && m.acknowledged)); });
@@ -121,7 +177,7 @@ test('shared room delivery and mention filtering', async () => { const room = aw
 test('room mentions cannot reach outside the room', async () => { await api('/v1/messages', { room: 'home', text: 'bad mention', mentions: [guest.agent.id], client_message_id: randomUUID() }, dot.token, 400); });
 test('outside contact requires approval by the correct human owner', async () => {
   await api('/v1/messages', { to: grok.agent.id, text: 'no permission', client_message_id: randomUUID() }, guest.token, 403);
-  const request = await api('/v1/connections', { to: grok.agent.id, reason: 'Coordinate a test' }, guest.token, 201);
+  const request = await api('/v1/connections', { to: grok.agent.id }, guest.token, 201);
   assert.equal(request.status, 'pending'); assert((await api('/v1/inbox', {}, grok.token)).messages.some(m => m.data?.request_id === request.request_id));
   await api('/admin/connections/decide', { request_id: request.request_id, decision: 'accepted' }, guest.owner_token, 403);
   await api('/admin/connections/decide', { request_id: request.request_id, decision: 'accepted' }, grok.token, 403);
@@ -190,13 +246,17 @@ test('forged internal identities, unknown browser origins, and oversized bodies 
   await api('/__test/edge-deny',undefined,admin,429);
   await api('/admin/export',undefined,dot.token,403);await api('/admin/export',undefined,guest.owner_token,403);
 });
-test('encrypted backup round-trips and restores identity and inbox into an empty isolated network',async()=>{
+test('encrypted recovery backups restore identity and receipts without communication content',async()=>{
   const legacyInvite=await api('/admin/invites',{name:'legacy pending enrollment'},admin,201);
   for(let i=0;i<16;i++) await api('/oauth/register',{redirect_uris:['http://127.0.0.1:9876/callback'],token_endpoint_auth_method:'none'},'',201);
   const backup=await api('/admin/backup',{});assert.equal(backup.verified,true);
   const encrypted=await api('/admin/backup/download?key='+encodeURIComponent(backup.key));assert.equal(encrypted.format,'btb-encrypted-v1');assert(!JSON.stringify(encrypted).includes(sent.text));
   const moduleFile=join(directory,'recovery.mjs');await build({entryPoints:['src/recovery.ts'],outfile:moduleFile,bundle:true,platform:'node',format:'esm'});
   const {openBackup}=await import(moduleFile),snapshot=await openBackup(encrypted,'01'.repeat(32));assert(snapshot.oauth.some(x=>x.key.startsWith('client:')));
+  assert(snapshot.tables.messages.every(message=>message.text===null&&message.data===null));
+  // A pre-upgrade restore must not resurrect readable conversation content.
+  snapshot.tables.messages.find(message=>message.seq===sent.id).text='legacy plaintext must not return';
+  snapshot.tables.messages.find(message=>message.seq===sent.id).data=JSON.stringify({private:'legacy data must not return'});
   // An older snapshot has no optional temporary-key field; restore it with the
   // original permanent enrollment semantics, without relaxing other columns.
   for (const invite of snapshot.tables.invites) delete invite.credential_ttl_seconds;
@@ -205,16 +265,21 @@ test('encrypted backup round-trips and restores identity and inbox into an empty
   const legacyEnrollment=await api('/__test/recovered?path=/v1/claim',{code:legacyInvite.code},'',201);assert.equal(legacyEnrollment.expires_at,null);
   const me=await api('/__test/recovered?path=/v1/me',undefined,dot.token);assert.equal(me.id,dot.agent.id);
   const inbox=await api('/__test/recovered?path=/v1/inbox',{include_acked:true},grok.token);assert(inbox.messages.some(x=>x.id===sent.id));
+  assert(!JSON.stringify(inbox).includes('legacy plaintext')); assert(!JSON.stringify(inbox).includes('legacy data')); assert(inbox.messages.every(message=>message.text===null&&message.data===null&&!message.encrypted));
   assert.equal((await api('/__test/restore',snapshot)).restored,true);
   await api('/admin/restore',snapshot,admin,409);
 });
 test('CLI pairing stores private credentials and its stdio bridge serves real MCP', async () => {
   const inv = await api('/admin/invites', { name: 'cli-bot' }, admin, 201), config = join(directory, 'cli', 'agent.json');
-  const pair = spawn(process.execPath, ['bin/btb.mjs', 'pair', inv.code, '--server', base, '--config', config], { stdio: ['ignore', 'pipe', 'pipe'] }); let output = ''; pair.stdout.on('data', x => { output += x; }); const [exit] = await once(pair, 'exit'); assert.equal(exit, 0);
+  const pair = spawn(process.execPath, ['bin/btb.mjs', 'pair', inv.code, '--server', base, '--config', config], { stdio: ['ignore', 'pipe', 'pipe'] }); let output = '', pairError = ''; pair.stdout.on('data', x => { output += x; }); pair.stderr.on('data', x => { pairError += x; }); const [exit] = await once(pair, 'exit'); assert.equal(exit, 0, pairError);
   const stored = JSON.parse(await readFile(config, 'utf8'));
   const secondInvite = await api('/admin/invites', { name: 'must-not-replace-cli' }, admin, 201);
   const duplicate = spawn(process.execPath, ['bin/btb.mjs', 'pair', secondInvite.code, '--server', base, '--config', config], { stdio: ['ignore', 'pipe', 'pipe'] }); let duplicateError = ''; duplicate.stderr.on('data', x => { duplicateError += x; }); assert.equal((await once(duplicate, 'exit'))[0], 1); assert.match(duplicateError, /preserved/); assert.deepEqual(JSON.parse(await readFile(config, 'utf8')), stored);
   assert(!output.includes(stored.token)); assert.equal((await stat(config)).mode & 0o777, 0o600);
+  const initialized=spawn(process.execPath,['bin/btb.mjs','privacy-init','--server',base,'--config',config],{stdio:['ignore','pipe','pipe']}); let initError=''; initialized.stderr.on('data',x=>initError+=x); assert.equal((await once(initialized,'exit'))[0],0,initError);
+  const privateProfile=JSON.parse(await readFile(config,'utf8'));
+  trustPeer(privateProfile.encryption,grok.agent.id,endpointKeys.get(grok.agent.id).public_key,fingerprint(endpointKeys.get(grok.agent.id).public_key));
+  await writeFile(config,JSON.stringify(privateProfile),{mode:0o600});
   const c = new Client({ name: 'stdio-test', version: '1' });
   await c.connect(new StdioClientTransport({ command: process.execPath, args: ['bin/btb.mjs', 'mcp', '--config', config, '--server', base] }));
   try {
@@ -224,6 +289,14 @@ test('CLI pairing stores private credentials and its stdio bridge serves real MC
     assert.equal(tools.find(t => t.name === 'ioio_whoami')._meta['openai/profile'], true);
     assert(tools.find(t => t.name === 'ioio_whoami').outputSchema.properties.owner);
     assert.equal((await c.callTool({name:'ioio_receiving_status',arguments:{}})).structuredContent.receiving,'manual_or_scheduled');
+    const key=randomUUID(),text='local MCP endpoint privacy round-trip';
+    const first=await c.callTool({name:'ioio_send',arguments:{to:grok.agent.id,text,client_message_id:key}}); assert.equal(first.isError,undefined); assert.equal(first.structuredContent.text,text);
+    const repeated=await c.callTool({name:'ioio_send',arguments:{to:grok.agent.id,text,client_message_id:key}}); assert.equal(repeated.structuredContent.id,first.structuredContent.id);
+    trustPeer(endpointKeys.get(grok.agent.id),stored.agent.id,privateProfile.encryption.public_key,fingerprint(privateProfile.encryption.public_key)); endpointKeys.set(stored.agent.id,privateProfile.encryption);
+    const inbox=await api('/v1/inbox',{},grok.token); assert.equal(inbox.messages.find(message=>message.id===first.structuredContent.id).text,text);
+    const reply=await api('/v1/messages',{to:stored.agent.id,text:'encrypted reply',reply_to:first.structuredContent.id,client_message_id:randomUUID()},grok.token,201);
+    const received=await c.callTool({name:'ioio_inbox',arguments:{}}); assert.equal(received.structuredContent.messages.find(message=>message.id===reply.id).text,'encrypted reply');
+    const wire=await fetch(base+'/v1/inbox',{method:'POST',headers:{Authorization:'Bearer '+stored.token,'Content-Type':'application/json'},body:'{}'}); assert(!(await wire.text()).includes('encrypted reply'));
   } finally { await c.close(); }
 });
 
@@ -297,7 +370,7 @@ test('approved OAuth selection returns a protected callback document and cannot 
 test('owner website requires a session and CSRF before copying setup permissions', async () => {
   const session=await api('/__test/owner-session');const headers={Cookie:'__Host-btb-owner='+session.token,Origin:base};
   const before=await fetch(base+'/owner',{headers});const html=await before.text();assert(html.includes('No agents connected'));
-  assert(html.includes('portal@example.com'));assert(html.includes('Sign out'));assert(!html.includes('href="/owner/settings"'));assert(!html.includes('href="/owner/add-friend"'));
+  assert(!html.includes('portal@example.com'));assert(html.includes('Sign out'));assert(!html.includes('href="/owner/settings"'));assert(!html.includes('href="/owner/add-friend"'));
   for(const path of ['/owner/settings','/owner/add-friend']) { const r=await fetch(base+path,{headers,redirect:'manual'});assert.equal(r.status,303);assert.equal(r.headers.get('Location'),'/owner'); }
   const forged=await fetch(base+'/owner/setup',{method:'POST',headers,body:new URLSearchParams({csrf:'forged'})});assert.equal(forged.status,403);
   const response=await fetch(base+'/owner/setup',{method:'POST',headers,body:new URLSearchParams({csrf:session.csrf})});assert.equal(response.status,200);const result=await response.json();
@@ -323,7 +396,7 @@ test('ownership context is authenticated across discovery, messages and threads'
   const same = await api('/v1/messages',{to:muse.agent.id,text:'Coordinate this existing task',client_message_id:randomUUID()},dot.token,201);
   assert.equal(same.sender_context.relationship,'self');
   assert.equal((await api('/v1/inbox',{},muse.token)).messages.find(m=>m.id===same.id).sender_context.relationship,'same_owner');
-  const request = await api('/v1/connections',{to:muse.agent.id,reason:'Existing task coordination'},guest.token,201);
+  const request = await api('/v1/connections',{to:muse.agent.id},guest.token,201);
   const system = (await api('/v1/inbox',{},muse.token)).messages.find(m=>m.data?.request_id===request.request_id);
   assert.equal(system.sender_context.relationship,'system'); assert.equal(system.data.requester.relationship,'external');
   await api('/v1/receiving?agent_id='+muse.agent.id,undefined,guest.token,403);
