@@ -109,7 +109,7 @@ test('Grok adapter binds only configured OAuth identity and retries authenticate
   const warnings = [];
   t.mock.method(console,'warn',value => warnings.push(value));
   t.mock.method(globalThis,'fetch',async (url,init) => {
-    assert.equal(url,f.hub.grokRoutine.url); assert.equal(init.headers.Authorization,'Bearer fixture-key'); assert.equal(init.redirect,'error');
+    assert.equal(url,f.hub.grokRoutine.url); assert.equal(init.headers.Authorization,'Bearer fixture-key'); assert.equal(init.redirect,'manual');
     calls.push(JSON.parse(init.body)); assert.equal(calls.at(-1).name,'ioio.message.created'); assert(!init.body.includes('private message'));
     if (fail) throw new Error('DNS failed for '+url+' with fixture-key');
     return new Response(null,{status:200});

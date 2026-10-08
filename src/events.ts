@@ -48,7 +48,7 @@ export class Events {
       const routine = this.hub.grokRoutine;
       requireThat(routine && routine.agentId === subscription.agent_id && routine.url === subscription.callback_url, 503, 'Grok routine disabled');
       this.routineURL(routine.url);
-      return fetch(routine.url, { method:'POST', redirect:'error', signal:AbortSignal.timeout(10000), headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+routine.key, 'Idempotency-Key':eventId }, body:JSON.stringify(value) });
+      return fetch(routine.url, { method:'POST', redirect:'manual', signal:AbortSignal.timeout(10000), headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+routine.key, 'Idempotency-Key':eventId }, body:JSON.stringify(value) });
     }
     this.validateCallback(subscription.callback_url);
     const text = JSON.stringify(value), timestamp = String(Math.floor(Date.now() / 1000));
