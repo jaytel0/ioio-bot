@@ -34,7 +34,7 @@ try {
   if ((await api('/v1/inbox', {}, receiver.token)).messages.some(m => m.id === first.id)) throw new Error('Acknowledgement failed');
   c = new Client({ name: 'btb-production-smoke', version: '1' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
   await c.connect(new StreamableHTTPClientTransport(new URL(server + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${sender.token}` } } }));
-  if ((await c.callTool({ name: 'btb_whoami', arguments: {} })).structuredContent.id !== sender.agent.id) throw new Error('MCP identity failed');
+  if ((await c.callTool({ name: 'ioio_whoami', arguments: {} })).structuredContent.id !== sender.agent.id) throw new Error('MCP identity failed');
   if (!(await c.callTool({name:'ioio_send',arguments:content})).isError) throw new Error('Remote MCP accepted plaintext');
   const exported=await api('/admin/export');
   if (exported.tables.messages.some(message=>message.text!==null||message.data!==null)) throw new Error('Export included content');
