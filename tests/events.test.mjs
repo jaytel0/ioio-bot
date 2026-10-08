@@ -50,6 +50,19 @@ test('webhook retries preserve event IDs and never remove inbox messages', async
   failures = false; f.db.run('UPDATE outbox SET next_at = 0'); await f.events.flush(); assert.equal(eventIds[0], eventIds[1]); assert.equal(f.db.one('SELECT * FROM outbox').status, 'delivered'); assert.equal(f.db.one('SELECT * FROM deliveries').acked, 0); f.close();
 });
 test('directed subscriptions ignore undirected room broadcasts', async t => { const f = fixture(); t.mock.method(globalThis, 'fetch', async (_, init) => Response.json({ challenge: JSON.parse(init.body).challenge })); await f.events.handle(principal, 'events/subscribe', subscription()); f.events.enqueue(principal.agent_id, 1, 0); assert.equal(f.db.one('SELECT COUNT(*) AS n FROM outbox').n, 0); f.close(); });
+test('acknowledged inbox messages stop pending wake retries', async t => {
+  const f = fixture();
+  t.mock.method(globalThis, 'fetch', async (_, init) => Response.json({ challenge: JSON.parse(init.body).challenge }));
+  await f.events.handle(principal, 'events/subscribe', subscription());
+  f.db.run("INSERT INTO messages (seq,sender,target,kind,thread_id,client_message_id,mentions,hop_count,created_at) VALUES (1,'A-000-000-002','A-000-000-001','request','thread','key','[]',0,'2026-10-07T12:00:00Z')");
+  f.db.run("INSERT INTO deliveries VALUES ('A-000-000-001',1,1,1)");
+  f.events.enqueue(principal.agent_id, 1, 1);
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('Processed messages must not wake the host again'); });
+  await f.events.flush();
+  assert.equal(f.db.one('SELECT * FROM outbox').status, 'stopped');
+  assert.equal(f.db.one('SELECT * FROM outbox').attempts, 0);
+  f.close();
+});
 test('revoked OAuth grants stop queued webhook delivery', async t => { const f = fixture(); t.mock.method(globalThis, 'fetch', async (_, init) => Response.json({ challenge: JSON.parse(init.body).challenge })); await f.events.handle({ ...principal, family: 'revoked-grant' }, 'events/subscribe', subscription()); f.events.enqueue(principal.agent_id, 1, 1); await f.events.flush(); assert.equal(f.db.one('SELECT * FROM outbox').status, 'stopped'); f.close(); });
 
 test('enabling push wakes the receiver to catch up on unacknowledged directed messages', async t => {
