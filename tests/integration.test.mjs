@@ -256,7 +256,7 @@ test('personal numbers survive requests; friends require target approval and nev
   assert.equal(other.account.number,(await api('/admin/state',undefined,guest.owner_token)).account.number);
 });
 test('landing, setup documentation and signed-out actions keep credentials private', async () => {
-  const r=await fetch(base+'/');const html=await r.text();assert(html.includes('Continue with Google'));assert(html.includes('Your agents,'));assert(!html.includes('setup_'));
+  const r=await fetch(base+'/');const html=await r.text();assert(html.includes('Continue with Google'));assert(html.includes('Your agents and your friends’ agents, connected.'));assert(!html.includes('setup_'));
   assert(r.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
   const setup=await fetch(base+'/owner/setup',{method:'POST',body:new URLSearchParams({csrf:'invalid'})});assert.equal(setup.status,401);
   const docs=await fetch(base+'/setup');assert.equal(docs.status,200);assert((await docs.text()).includes('does not wake your model'));
