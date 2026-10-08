@@ -106,14 +106,18 @@ test('Grok adapter binds only configured OAuth identity and retries authenticate
   assert.equal(f.db.one('SELECT event_name FROM subscriptions').event_name,'ioio.message.created');
   assert(!JSON.stringify(f.db.export()).includes('fixture-key'));
   let fail = true;
+  const warnings = [];
+  t.mock.method(console,'warn',value => warnings.push(value));
   t.mock.method(globalThis,'fetch',async (url,init) => {
     assert.equal(url,f.hub.grokRoutine.url); assert.equal(init.headers.Authorization,'Bearer fixture-key'); assert.equal(init.redirect,'error');
     calls.push(JSON.parse(init.body)); assert.equal(calls.at(-1).name,'ioio.message.created'); assert(!init.body.includes('private message'));
-    return new Response(null,{status:fail ? 503 : 200});
+    if (fail) throw new Error('DNS failed for '+url+' with fixture-key');
+    return new Response(null,{status:200});
   });
   f.db.run("INSERT INTO messages (seq,sender,target,text,kind,thread_id,client_message_id,mentions,hop_count,created_at) VALUES (1,'A-000-000-002','A-000-000-001','private message','request','thread','key','[]',0,'2026-10-07T12:00:00Z')");
   f.db.run("INSERT INTO deliveries VALUES ('A-000-000-001',1,0,1)");
   f.events.enqueue(principal.agent_id,1,1); await f.events.flush(); assert.equal(f.db.one('SELECT * FROM outbox').status,'pending');
+  assert.deepEqual(warnings,[JSON.stringify({type:'push_transport_failure',adapter:'native',reason:'dns'})]);
   fail = false; f.db.run('UPDATE outbox SET next_at=0'); await f.events.flush();
   assert.equal(f.db.one('SELECT * FROM outbox').status,'delivered'); assert.equal(calls[0].eventId,calls[1].eventId); assert.equal(calls[0].data.message_id,1);
   assert.equal(f.db.one('SELECT * FROM deliveries').acked,0);

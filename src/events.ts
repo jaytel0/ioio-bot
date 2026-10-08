@@ -142,7 +142,11 @@ export class Events {
       if (!sub || !grantValid || this.hub.agent(sub.agent_id).revoked || (sub.id === 'grok_routine' && !this.hub.grokRoutine) || (sub.expires_at && sub.expires_at <= Date.now())) { this.hub.db.run("UPDATE outbox SET status = 'stopped' WHERE id = ?", item.id); continue; }
       const message = this.hub.db.one('SELECT kind, created_at FROM messages WHERE seq = ?', item.seq)!;
       let status = 0;
-      try { status = (await this.post(sub, item.id, { eventId: item.id, name: sub.event_name ?? 'btb.message.created', timestamp: message.created_at, data: { agent_id: sub.agent_id, message_id: item.seq, kind: message.kind }, cursor: null })).status; } catch { /* Durable retry below. No message or credentials enter logs. */ }
+      try { status = (await this.post(sub, item.id, { eventId: item.id, name: sub.event_name ?? 'btb.message.created', timestamp: message.created_at, data: { agent_id: sub.agent_id, message_id: item.seq, kind: message.kind }, cursor: null })).status; } catch (error) {
+        // Fixed categories only: runtime messages can contain callback URLs or credentials.
+        const description = error instanceof Error ? error.message : '';
+        console.warn(JSON.stringify({ type: 'push_transport_failure', adapter: sub.id === 'grok_routine' ? 'native' : 'standard', reason: /Invalid Grok|disabled/.test(description) ? 'configuration' : /redirect/i.test(description) ? 'redirect' : /dns|resolve/i.test(description) ? 'dns' : /certificate|tls|ssl/i.test(description) ? 'tls' : /header/i.test(description) ? 'header' : /timeout|abort/i.test(description) ? 'timeout' : 'transport' }));
+      }
       const attempts = item.attempts + 1;
       const state = status >= 200 && status < 300 ? 'delivered' : status === 410 || status === 413 || attempts >= 12 ? 'failed' : 'pending';
       this.hub.db.run('UPDATE outbox SET status = ?, attempts = ?, last_status = ?, next_at = ? WHERE id = ?', state, attempts, status, Date.now() + Math.min(3600000, 1000 * 2 ** attempts), item.id);
