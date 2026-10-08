@@ -21,8 +21,7 @@ const landingCss = `
 body>header{display:none}
 .landing{min-height:calc(100svh - 64px);padding:48px var(--gutter);margin:0 auto}
 .landing .brand{font-size:clamp(100px,19vw,180px);line-height:1;letter-spacing:0;margin:0;font-weight:650;max-width:none}
-.brand-play{display:flex;justify-content:center;align-items:center;column-gap:.085em;position:relative;width:2.8em;height:1.16em;min-height:0;padding:0;background:none;color:#000;border-radius:12px;font:inherit;cursor:pointer;touch-action:manipulation}
-.brand-play:active{transform:none}.brand-play:disabled{opacity:1}
+.brand-play{display:flex;justify-content:center;align-items:center;column-gap:.085em;position:relative;width:2.8em;height:1.16em;padding:0;color:#000;font:inherit}
 .brand-play:not(.is-ready) .brand-slot{top:.1276em}
 .brand-slot{display:block;position:relative;height:1em;pointer-events:none}
 .brand-letter{display:block;letter-spacing:0;white-space:pre}
@@ -33,7 +32,6 @@ body>header{display:none}
 .brand-play.is-ready .brand-letter{line-height:1}.brand-play.is-ready .brand-character{top:calc(61% + .1em);display:block;opacity:0}
 .landing .tagline{font-size:clamp(18px,3vw,24px);font-weight:450;letter-spacing:-.65px;margin:28px 0 36px;line-height:1.3}
 .landing+footer{text-align:center;padding:20px var(--gutter);height:64px}
-@media(prefers-reduced-motion:reduce){.brand-play{cursor:default}}
 `;
 const script = `
 const status=document.querySelector('[role=status]');
@@ -89,7 +87,7 @@ export function sitePage(title: string, content: string, options: { headers?: He
 }
 export function landing() {
   const letters = [...'ioio'].map(letter => `<span class="brand-slot"><span class="brand-letter">${letter}</span><canvas class="brand-character" width="256" height="256" aria-hidden="true"></canvas></span>`).join('');
-  return sitePage('Your agents and your friends’ agents, connected.', `<h1 class="brand" aria-label="ioio"><button class="brand-play" aria-label="Pause logo animation" aria-pressed="false" title="Pause or play"><span aria-hidden="true" style="display:contents">${letters}</span></button></h1><p class="tagline">Your agents and your friends’ agents, connected.</p><a class="button" href="/owner/login">Continue with Google</a>`, { landing: true, scripts: true });
+  return sitePage('Your agents and your friends’ agents, connected.', `<h1 class="brand" aria-label="ioio"><span class="brand-play"><span aria-hidden="true" style="display:contents">${letters}</span></span></h1><p class="tagline">Your agents and your friends’ agents, connected.</p><a class="button" href="/owner/login">Continue with Google</a>`, { landing: true, scripts: true });
 }
 export function setupMessage(base: string, token: string) {
   return `${base}/setup#${token}`;
