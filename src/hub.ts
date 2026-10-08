@@ -1,7 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
 import { Store } from './store';
-import { ApiError, bearer, body, readLimitedText, canonical, equal, hash, idSchema, inviteSchema, json, now, randomCode, randomToken, setupCode, requireThat, sendSchema, type Env, type Row } from './shared';
+import { ApiError, bearer, body, readLimitedText, canonical, equal, hash, idSchema, inviteSchema, json, now, randomCode, randomToken, setupCode, requireThat, sendSchema, pushSchema, type Env, type Row } from './shared';
+import { agentGuidance } from './agent-guidance';
 import { oauthHelpers } from './oauth';
 import { mcp } from './mcp';
 import { Events } from './events';
@@ -90,6 +91,38 @@ export class BtbHub extends DurableObject<Env> {
   }
   agent(id: string): Row { const agent = this.db.one('SELECT * FROM agents WHERE id = ?', id); requireThat(agent, 404, 'Agent not found'); return agent; }
   profile(agent: Row) { return { id: agent.id, name: agent.name, capabilities: JSON.parse(agent.capabilities), created_at: agent.created_at }; }
+  identity(agentId: string, viewerId: string) {
+    const agent = this.agent(agentId), viewer = this.agent(viewerId);
+    const account = this.account(agent.owner_id), owner = { number: account.number, name: account.name };
+    return { ...this.profile(agent), owner, relationship: agentId === viewerId ? 'self' : agent.owner_id === viewer.owner_id ? 'same_owner' : 'external' };
+  }
+  rooms(agentId: string) {
+    return this.db.all('SELECT r.id, r.name, r.owner_id FROM rooms r JOIN members m ON r.id = m.room_id WHERE m.agent_id = ?', agentId).map(room => ({ id: room.id, name: room.name, relationship: room.owner_id === this.agent(agentId).owner_id ? 'same_owner' : 'external', participants: this.db.all('SELECT a.id FROM members m JOIN agents a ON a.id = m.agent_id WHERE m.room_id = ? AND a.revoked = 0', room.id).map(a => this.identity(a.id, agentId)) }));
+  }
+  async receivingStatus(viewerId: string, agentId = viewerId) {
+    requireThat(!this.agent(agentId).revoked && this.linked(viewerId, agentId), 403, 'Receiving status requires an approved contact');
+    const push = await this.events.receivingStatus(agentId);
+    const streamConnected = this.ctx.getWebSockets(agentId).some(socket => {
+      const saved = socket.deserializeAttachment();
+      const token = this.db.one('SELECT * FROM tokens WHERE hash = ?', saved.hash);
+      return token && !token.used && (!token.expires_at || token.expires_at > Date.now());
+    });
+    return { agent: this.identity(agentId, viewerId), push, stream_connected: streamConnected, receiving: push.active_subscriptions ? 'push' : streamConnected ? 'stream' : 'manual_or_scheduled', automatic_wake_confirmed: false };
+  }
+  async enablePush(principal: Row, value: unknown) {
+    const input = pushSchema.parse(value);
+    const subscription = await this.events.handle(principal, 'events/subscribe', { name: 'ioio.message.created', arguments: { directed_only: input.directed_only }, delivery: { mode: 'webhook', url: input.url, secret: input.secret }, ttlMs: null });
+    return { subscription_id: subscription.id, callback_verified: true, automatic_wake_confirmed: false, next_step: 'Send an authorized test message and verify the host starts an agent run, processes its inbox and acknowledges it.' };
+  }
+  async deliveryStatus(agentId: string, seq: number) {
+    const message = this.db.one('SELECT * FROM messages WHERE seq = ?', seq);
+    requireThat(message && message.sender === agentId, 403, 'Delivery status is available only to the sender');
+    const recipients = [];
+    for (const delivery of this.db.all('SELECT agent_id, acked FROM deliveries WHERE seq = ?', seq)) {
+      recipients.push({ agent: this.identity(delivery.agent_id, agentId), inbox: 'stored', acknowledged: Boolean(delivery.acked), push: await this.events.deliveryStatus(delivery.agent_id, seq) });
+    }
+    return { message_id: seq, recipients };
+  }
   googleOwner(subject: string, email: string) {
     requireThat(subject.length > 0 && subject.length <= 256 && email.length <= 320, 400, 'Invalid Google identity');
     return this.tx(() => {
@@ -165,10 +198,10 @@ export class BtbHub extends DurableObject<Env> {
   }
   visibleAgents(agentId: string) {
     const ownerId = this.agent(agentId).owner_id;
-    return this.db.all(`SELECT a.* FROM agents a WHERE a.revoked = 0 AND (a.owner_id = ? OR EXISTS (SELECT 1 FROM connections c WHERE c.status = 'accepted' AND ((c.requester = a.id AND c.target = ?) OR (c.target = a.id AND c.requester = ?))) OR EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND ((f.requester = ? AND f.target = a.owner_id) OR (f.target = ? AND f.requester = a.owner_id))))`, ownerId, agentId, agentId, ownerId, ownerId).map(a => ({ ...this.profile(a), account: this.db.one('SELECT number, name FROM accounts WHERE owner_id = ?', a.owner_id) ?? null }));
+    return this.db.all(`SELECT a.* FROM agents a WHERE a.revoked = 0 AND (a.owner_id = ? OR EXISTS (SELECT 1 FROM connections c WHERE c.status = 'accepted' AND ((c.requester = a.id AND c.target = ?) OR (c.target = a.id AND c.requester = ?))) OR EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND ((f.requester = ? AND f.target = a.owner_id) OR (f.target = ? AND f.requester = a.owner_id))))`, ownerId, agentId, agentId, ownerId, ownerId).map(a => { const identity = this.identity(a.id, agentId); return { ...identity, account: identity.owner }; });
   }
   member(room: string, agentId: string) { return Boolean(this.db.one('SELECT 1 FROM members WHERE room_id = ? AND agent_id = ?', room, agentId)); }
-  message(row: Row) { return { id: row.seq, from: row.sender, to: row.target, room: row.room_id, text: row.text, data: row.data === null ? null : JSON.parse(row.data), kind: row.kind, thread_id: row.thread_id, reply_to: row.reply_to, mentions: JSON.parse(row.mentions), hop_count: row.hop_count, created_at: row.created_at }; }
+  message(row: Row, viewerId?: string) { return { id: row.seq, from: row.sender, ...(viewerId ? { sender_context: row.sender === 'BTB' ? { id: 'BTB', name: 'IO', relationship: 'system', owner: null } : this.identity(row.sender, viewerId) } : {}), to: row.target, room: row.room_id, text: row.text, data: row.data === null ? null : JSON.parse(row.data), kind: row.kind, thread_id: row.thread_id, reply_to: row.reply_to, mentions: JSON.parse(row.mentions), hop_count: row.hop_count, created_at: row.created_at }; }
   canRead(agentId: string, seq: number) { return Boolean(this.db.one('SELECT 1 FROM messages m WHERE m.seq = ? AND (m.sender = ? OR EXISTS (SELECT 1 FROM deliveries d WHERE d.seq = m.seq AND d.agent_id = ?))', seq, agentId, agentId)); }
   publish(sender: string, input: Row, recipients: string[]) {
     this.db.run('INSERT INTO messages (sender, target, room_id, text, data, kind, thread_id, reply_to, client_message_id, mentions, hop_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', sender, input.to ?? null, input.room ?? null, input.text ?? null, input.data === undefined ? null : JSON.stringify(input.data), input.kind, input.thread_id ?? crypto.randomUUID(), input.reply_to ?? null, input.client_message_id, JSON.stringify(input.mentions ?? []), input.hop_count ?? 0, now());
@@ -185,7 +218,7 @@ export class BtbHub extends DurableObject<Env> {
       const saved = socket.deserializeAttachment();
       const credential = this.db.one('SELECT * FROM tokens WHERE hash = ?', saved.hash);
       if (!credential || credential.used || (credential.expires_at && credential.expires_at <= Date.now()) || this.agent(agentId).revoked) { socket.close(1008, 'Credential revoked or expired'); continue; }
-      try { socket.send(JSON.stringify({ type: 'message', message })); } catch { socket.close(); }
+      try { const row = this.db.one('SELECT * FROM messages WHERE seq = ?', message.id)!; socket.send(JSON.stringify({ type: 'message', message: this.message(row, agentId) })); } catch { socket.close(); }
     }
     await this.events.schedule();
     this.background(this.events.flush());
@@ -224,12 +257,12 @@ export class BtbHub extends DurableObject<Env> {
       return { result: this.publish(agentId, input, recipients), recipients };
     });
     await this.notify(result, recipients);
-    return result;
+    return this.message(this.db.one('SELECT * FROM messages WHERE seq = ?', result.id)!, agentId);
   }
   inbox(agentId: string, args: Row = {}) {
     const input = z.object({ after: z.number().int().nonnegative().default(0), limit: z.number().int().min(1).max(100).default(50), include_acked: z.boolean().default(false), directed_only: z.boolean().default(false) }).strict().parse(args);
     const messages = this.db.all('SELECT m.*, d.acked, d.directed FROM deliveries d JOIN messages m ON m.seq = d.seq WHERE d.agent_id = ? AND d.seq > ? AND (? = 1 OR d.acked = 0) AND (? = 0 OR d.directed = 1) ORDER BY m.seq LIMIT ?', agentId, input.after, +input.include_acked, +input.directed_only, input.limit);
-    return { messages: messages.map(m => ({ ...this.message(m), acknowledged: Boolean(m.acked), directed: Boolean(m.directed) })), next_cursor: messages.at(-1)?.seq ?? input.after, acknowledgement_required: true };
+    return { messages: messages.map(m => ({ ...this.message(m, agentId), acknowledged: Boolean(m.acked), directed: Boolean(m.directed) })), next_cursor: messages.at(-1)?.seq ?? input.after, acknowledgement_required: true };
   }
   ack(agentId: string, value: unknown) {
     const { message_ids } = z.object({ message_ids: z.array(z.number().int().positive()).min(1).max(100) }).strict().parse(value);
@@ -246,7 +279,7 @@ export class BtbHub extends DurableObject<Env> {
     const id = crypto.randomUUID();
     const message = this.tx(() => {
       this.db.run("INSERT INTO connections VALUES (?, ?, ?, ?, 'pending', ?)", id, agentId, to, reason, now());
-      return this.publish('BTB', { to, kind: 'connection_request', data: { request_id: id, requester: this.profile(this.agent(agentId)), reason, owner_approval_required: true }, client_message_id: id }, [to]);
+      return this.publish('BTB', { to, kind: 'connection_request', data: { request_id: id, requester: this.identity(agentId, to), reason, owner_approval_required: true }, client_message_id: id }, [to]);
     });
     await this.notify(message, [to]);
     return { request_id: id, status: 'pending', owner_approval_required: true };
@@ -338,7 +371,7 @@ export class BtbHub extends DurableObject<Env> {
     try {
       requireThat(path === '/admin/restore' || path === '/health' || this.db.one("SELECT value FROM recovery_state WHERE key = 'status'")?.value !== 'restoring', 503, 'Recovery in progress');
       if (request.method === 'GET' && (path === '/' || path === '/health')) return json({ service: 'ioio.bot', version: '0.1.0', status: 'ok', mcp: this.base(request) + '/mcp', docs: this.base(request) + '/docs', durable: true });
-      if (request.method === 'GET' && path === '/docs') return new Response('ioio.bot is a headless agent network. Connect to /mcp with OAuth, or use a permanent agent Bearer credential.\nPair with POST /v1/claim {"code":"<8 digits>"}; send /v1/messages; read /v1/inbox; acknowledge /v1/ack; request consent /v1/connections.\nSource and setup: https://github.com/jaytel0/ioio-bot\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+      if (request.method === 'GET' && path === '/docs') return new Response(`${agentGuidance}\nSetup: ${this.base(request)}/setup.txt\nSource: https://github.com/jaytel0/ioio-bot\n`, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
       if (path.startsWith('/admin/')) return await this.admin(await this.auth(request, true), request, path);
       if (path === '/v1/join' && request.method === 'POST') { this.rate('join-global', 2000, 86400000); return json(await this.join(await body(request)), 201); }
       if (path === '/v1/claim' && request.method === 'POST') { this.rate('claim-global', 2000, 86400000); this.rate(`claim:${request.headers.get('CF-Connecting-IP') ?? 'local'}`, 10, 60000); return json(await this.claim(await body(request)), 201); }
@@ -352,9 +385,12 @@ export class BtbHub extends DurableObject<Env> {
       }
       const principal = await this.auth(request);
       if (path === '/mcp') { this.events.bindGrokRoutine(principal); return await mcp(this, principal, request); }
-      if (request.method === 'GET' && path === '/v1/me') return json(this.profile(this.agent(principal.agent_id)));
+      if (request.method === 'GET' && path === '/v1/me') return json(this.identity(principal.agent_id, principal.agent_id));
       if (request.method === 'GET' && path === '/v1/agents') return json({ agents: this.visibleAgents(principal.agent_id) });
-      if (request.method === 'GET' && path === '/v1/rooms') return json({ rooms: this.db.all('SELECT r.id, r.name FROM rooms r JOIN members m ON r.id = m.room_id WHERE m.agent_id = ?', principal.agent_id) });
+      if (request.method === 'GET' && path === '/v1/rooms') return json({ rooms: this.rooms(principal.agent_id) });
+      if (request.method === 'GET' && path === '/v1/receiving') { const target = new URL(request.url).searchParams.get('agent_id'); return json(await this.receivingStatus(principal.agent_id, target === null ? principal.agent_id : idSchema.parse(target))); }
+      if (request.method === 'POST' && path === '/v1/push') return json(await this.enablePush(principal, await body(request)));
+      if (request.method === 'GET' && /^\/v1\/messages\/\d+\/delivery$/.test(path)) return json(await this.deliveryStatus(principal.agent_id, z.coerce.number().int().positive().parse(path.split('/')[3])));
       if (request.method === 'POST' && path === '/v1/messages') return json(await this.send(principal.agent_id, await body(request)), 201);
       if (request.method === 'POST' && path === '/v1/inbox') return json(this.inbox(principal.agent_id, await body(request)));
       if (request.method === 'POST' && path === '/v1/ack') return json(this.ack(principal.agent_id, await body(request)));
@@ -363,7 +399,7 @@ export class BtbHub extends DurableObject<Env> {
         requireThat(request.headers.get('Upgrade')?.toLowerCase() === 'websocket', 426, 'WebSocket upgrade required');
         const pair = new WebSocketPair();
         this.ctx.acceptWebSocket(pair[1], [principal.agent_id]); pair[1].serializeAttachment({ agent_id: principal.agent_id, hash: principal.hash });
-        pair[1].send(JSON.stringify({ type: 'ready', agent: this.profile(this.agent(principal.agent_id)), recover_via_inbox: true }));
+        pair[1].send(JSON.stringify({ type: 'ready', agent: this.identity(principal.agent_id, principal.agent_id), recover_via_inbox: true }));
         return new Response(null, { status: 101, webSocket: pair[0] });
       }
       throw new ApiError(404, 'Unknown endpoint');

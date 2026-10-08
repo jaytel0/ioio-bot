@@ -33,6 +33,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS webhook_hosts (host TEXT PRIMARY KEY);
     `);
     if (!sql.exec('PRAGMA table_info(invites)').toArray().some(column => column.name === 'credential_ttl_seconds')) sql.exec('ALTER TABLE invites ADD COLUMN credential_ttl_seconds INTEGER');
+    if (!sql.exec('PRAGMA table_info(subscriptions)').toArray().some(column => column.name === 'event_name')) sql.exec("ALTER TABLE subscriptions ADD COLUMN event_name TEXT NOT NULL DEFAULT 'btb.message.created'");
     sql.exec("INSERT OR IGNORE INTO rooms VALUES ('home', 'home', 'My agents')");
     sql.exec("INSERT OR IGNORE INTO webhook_hosts VALUES ('chatgpt.com'), ('api.openai.com')");
   }
@@ -52,7 +53,8 @@ export class Store {
       this.run(`DELETE FROM ${table}`);
       for (const original of tables[table]) {
         // Backups made before expiring enrollment preserve their permanent-key default.
-        const row = table === 'invites' && !Object.hasOwn(original, 'credential_ttl_seconds') ? { ...original, credential_ttl_seconds: null } : original;
+        const compatible = table === 'subscriptions' && !Object.hasOwn(original, 'event_name') ? { ...original, event_name: 'btb.message.created' } : original;
+        const row = table === 'invites' && !Object.hasOwn(original, 'credential_ttl_seconds') ? { ...original, credential_ttl_seconds: null } : compatible;
         const keys = Object.keys(row);
         if (keys.length !== columns.length || keys.some(key => !columns.includes(key))) throw new Error('Invalid backup row');
         this.run(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, ...keys.map(key => row[key]));

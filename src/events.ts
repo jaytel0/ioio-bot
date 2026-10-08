@@ -3,7 +3,7 @@ import type { BtbHub } from './hub';
 import { ApiError, equal, eventDefinition, eventName, hash, randomToken, requireThat, type Row } from './shared';
 
 const subscriptionSchema = z.object({
-  name: z.literal(eventName), arguments: z.object({ directed_only: z.boolean().default(false) }).strict().default({ directed_only: false }),
+  name: z.enum([eventName, 'btb.message.created']), arguments: z.object({ directed_only: z.boolean().default(false) }).strict().default({ directed_only: false }),
   delivery: z.object({ mode: z.literal('webhook'), url: z.string().url(), secret: z.string().optional() }).strict(),
   ttlMs: z.number().int().min(60000).max(31536000000).nullable().optional(), cursor: z.null().optional()
 }).strict();
@@ -60,7 +60,7 @@ export class Events {
     if (method === 'events/list') return { events: [eventDefinition] };
     const input = subscriptionSchema.parse(params);
     this.validateCallback(input.delivery.url);
-    const id = 'sub_' + await hash(JSON.stringify([principal.agent_id, input.delivery.url, input.name, input.arguments.directed_only]));
+    const id = 'sub_' + await hash(JSON.stringify([principal.agent_id, input.delivery.url, 'btb.message.created', input.arguments.directed_only]));
     if (method === 'events/unsubscribe') { this.hub.db.run('DELETE FROM subscriptions WHERE id = ? AND agent_id = ?', id, principal.agent_id); return {}; }
     requireThat(method === 'events/subscribe', 400, 'Unknown event method');
     requireThat(input.delivery.secret, 400, 'Signing secret required'); this.key(input.delivery.secret);
@@ -78,8 +78,49 @@ export class Events {
     // Finite subscriptions refresh automatically through the MCP event protocol.
     const expires = input.ttlMs === null ? null : Date.now() + (input.ttlMs ?? 31536000000);
     const rotate = existing && existing.secret !== subscription.secret;
-    this.hub.db.run('INSERT OR REPLACE INTO subscriptions (id, agent_id, callback_url, grant_family, secret, old_secret, rotate_until, directed_only, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', id, principal.agent_id, input.delivery.url, subscription.grant_family, subscription.secret, rotate ? existing.secret : existing?.old_secret ?? null, rotate ? Date.now() + 60000 : existing?.rotate_until ?? null, +input.arguments.directed_only, expires);
+    this.hub.db.run('INSERT OR REPLACE INTO subscriptions (id, agent_id, callback_url, grant_family, secret, old_secret, rotate_until, directed_only, expires_at, event_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', id, principal.agent_id, input.delivery.url, subscription.grant_family, subscription.secret, rotate ? existing.secret : existing?.old_secret ?? null, rotate ? Date.now() + 60000 : existing?.rotate_until ?? null, +input.arguments.directed_only, expires, input.name);
+    // One pointer wakes the host to drain its durable inbox, including messages
+    // that arrived before receiving was configured. Avoid a wake per old item.
+    const backlog = this.hub.db.one('SELECT seq, directed FROM deliveries WHERE agent_id = ? AND acked = 0 AND (? = 0 OR directed = 1) ORDER BY seq DESC LIMIT 1', principal.agent_id, +input.arguments.directed_only);
+    if (backlog) {
+      this.hub.db.run('INSERT OR IGNORE INTO outbox (id, subscription_id, seq, next_at) VALUES (?, ?, ?, ?)', `evt_${id}_${backlog.seq}`, id, backlog.seq, Date.now());
+      await this.schedule();
+      this.hub.background(this.flush());
+    }
     return { id, refreshBefore: expires === null ? null : new Date(expires).toISOString(), cursor: null, truncated: false };
+  }
+  private async activeSubscriptions(agentId: string) {
+    if (this.hub.agent(agentId).revoked) return [];
+    const subscriptions = this.hub.db.all('SELECT * FROM subscriptions WHERE agent_id = ? AND (expires_at IS NULL OR expires_at > ?)', agentId, Date.now());
+    const active: Row[] = [];
+    for (const sub of subscriptions) {
+      if (sub.grant_family && !await this.hub.grantActive(sub.grant_family)) continue;
+      try {
+        if (sub.id === 'grok_routine') {
+          const routine = this.hub.grokRoutine;
+          if (!routine || routine.agentId !== agentId || routine.url !== sub.callback_url) continue;
+          this.routineURL(routine.url);
+        } else this.validateCallback(sub.callback_url);
+      } catch { continue; }
+      active.push(sub);
+    }
+    return active;
+  }
+  async receivingStatus(agentId: string) {
+    const active = await this.activeSubscriptions(agentId);
+    const latest = active.map(sub => this.hub.db.one('SELECT status, attempts FROM outbox WHERE subscription_id = ? ORDER BY seq DESC LIMIT 1', sub.id)).filter(Boolean);
+    const state = active.length === 0 ? 'not_configured' : latest.some(item => item!.status === 'failed' || item!.status === 'stopped') ? 'failed' : latest.some(item => item!.status === 'pending' && item!.attempts > 0) ? 'retrying' : 'ready';
+    return { state, active_subscriptions: active.length, host_wake_required: true };
+  }
+  async deliveryStatus(agentId: string, seq: number) {
+    const active = await this.activeSubscriptions(agentId);
+    const attempts = this.hub.db.all('SELECT o.subscription_id, o.status, o.attempts FROM outbox o JOIN subscriptions s ON s.id = o.subscription_id WHERE s.agent_id = ? AND o.seq = ?', agentId, seq);
+    // Revocation/unsubscribe deletes the callback binding. Orphaned historical
+    // rows cannot safely be attributed to a room recipient; report uncertainty.
+    const missingHistory = Boolean(this.hub.db.one('SELECT 1 FROM outbox o WHERE o.seq = ? AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.id = o.subscription_id)', seq));
+    // "Accepted" is an HTTP success from a receiver, not a model-run receipt.
+    const state = attempts.some(item => item.status === 'delivered') ? 'accepted' : attempts.some(item => item.status === 'pending' && active.some(sub => sub.id === item.subscription_id)) ? 'pending' : attempts.some(item => item.status === 'failed') ? 'failed' : attempts.length ? 'stopped' : missingHistory ? 'unknown' : 'not_requested';
+    return { state, attempts: attempts.reduce((n, item) => n + item.attempts, 0), agent_wake_confirmed: false };
   }
   enqueue(agentId: string, seq: number, directed: number) {
     const subs = this.hub.db.all('SELECT * FROM subscriptions WHERE agent_id = ? AND (expires_at IS NULL OR expires_at > ?) AND (directed_only = 0 OR ? = 1)', agentId, Date.now(), directed);
@@ -101,7 +142,7 @@ export class Events {
       if (!sub || !grantValid || this.hub.agent(sub.agent_id).revoked || (sub.id === 'grok_routine' && !this.hub.grokRoutine) || (sub.expires_at && sub.expires_at <= Date.now())) { this.hub.db.run("UPDATE outbox SET status = 'stopped' WHERE id = ?", item.id); continue; }
       const message = this.hub.db.one('SELECT kind, created_at FROM messages WHERE seq = ?', item.seq)!;
       let status = 0;
-      try { status = (await this.post(sub, item.id, { eventId: item.id, name: eventName, timestamp: message.created_at, data: { agent_id: sub.agent_id, message_id: item.seq, kind: message.kind }, cursor: null })).status; } catch { /* Durable retry below. No message or credentials enter logs. */ }
+      try { status = (await this.post(sub, item.id, { eventId: item.id, name: sub.event_name ?? 'btb.message.created', timestamp: message.created_at, data: { agent_id: sub.agent_id, message_id: item.seq, kind: message.kind }, cursor: null })).status; } catch { /* Durable retry below. No message or credentials enter logs. */ }
       const attempts = item.attempts + 1;
       const state = status >= 200 && status < 300 ? 'delivered' : status === 410 || status === 413 || attempts >= 12 ? 'failed' : 'pending';
       this.hub.db.run('UPDATE outbox SET status = ?, attempts = ?, last_status = ?, next_at = ? WHERE id = ?', state, attempts, status, Date.now() + Math.min(3600000, 1000 * 2 ** attempts), item.id);

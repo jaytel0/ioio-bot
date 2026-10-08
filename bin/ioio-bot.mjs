@@ -59,6 +59,8 @@ try {
     case 'whoami': print(await request('/v1/me')); break;
     case 'agents': print(await request('/v1/agents')); break;
     case 'rooms': print(await request('/v1/rooms')); break;
+    case 'receiving': print(await request('/v1/receiving' + (positional[0] ? '?agent_id=' + encodeURIComponent(positional[0]) : ''))); break;
+    case 'delivery': print(await request('/v1/messages/' + encodeURIComponent(positional[0]) + '/delivery')); break;
     case 'inbox': print(await request('/v1/inbox', { after: Number(flags.after || 0), limit: Number(flags.limit || 50), include_acked: Boolean(flags.history), directed_only: Boolean(flags.directed) })); break;
     case 'ack': print(await request('/v1/ack', { message_ids: positional.map(Number) })); break;
     case 'send': {
@@ -92,16 +94,16 @@ try {
       const { Client, StreamableHTTPClientTransport } = await import('@modelcontextprotocol/client');
       const { McpServer, fromJsonSchema } = await import('@modelcontextprotocol/server');
       const { serveStdio } = await import('@modelcontextprotocol/server/stdio');
-      const remote = new Client({ name: 'btb-local-bridge', version: '0.1.0' });
+      const remote = new Client({ name: 'ioio-local-bridge', version: '0.1.0' });
       await remote.connect(new StreamableHTTPClientTransport(new URL(server + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${agent.token}` } } }));
       const catalog = await remote.listTools();
       serveStdio(() => {
-        const local = new McpServer({ name: 'ioio', version: '0.1.0' });
-        for (const tool of catalog.tools) local.registerTool(tool.name, { description: tool.description, inputSchema: fromJsonSchema(tool.inputSchema), annotations: tool.annotations }, async input => remote.callTool({ name: tool.name, arguments: input }));
+        const local = new McpServer({ name: 'ioio', version: '0.1.0' }, { instructions: remote.getInstructions() });
+        for (const tool of catalog.tools) local.registerTool(tool.name, { description: tool.description, inputSchema: fromJsonSchema(tool.inputSchema), ...(tool.outputSchema ? { outputSchema: fromJsonSchema(tool.outputSchema) } : {}), annotations: tool.annotations, _meta: tool._meta }, async input => remote.callTool({ name: tool.name, arguments: input }));
         return local;
       });
       process.stdin.on('end', () => remote.close()); break;
     }
-    default: process.stdout.write(`ioio — durable bot-to-bot messaging\n\nOwner: owner-init, owner-server, agent-create NAME, invite NAME --agent NUMBER, state, approve REQUEST_ID, reject REQUEST_ID, disconnect REQUEST_ID, revoke NUMBER, backup FILE\nAgent: pair CODE, register NAME, whoami, agents, rooms, inbox, ack ID..., send NUMBER TEXT, send TEXT --room home, connect NUMBER REASON, watch, mcp\nOptions: --profile NAME, --server URL, --config FILE, --owner-file FILE\nTokens are saved in private files, never printed. Pairing codes expire after 15 minutes; established credentials do not expire.\n`);
+    default: process.stdout.write(`ioio — durable bot-to-bot messaging\n\nOwner: owner-init, owner-server, agent-create NAME, invite NAME --agent NUMBER, state, approve REQUEST_ID, reject REQUEST_ID, disconnect REQUEST_ID, revoke NUMBER, backup FILE\nAgent: pair CODE, register NAME, whoami, agents, rooms, receiving [NUMBER], delivery MESSAGE_ID, inbox, ack ID..., send NUMBER TEXT, send TEXT --room home, connect NUMBER REASON, watch, mcp\nOptions: --profile NAME, --server URL, --config FILE, --owner-file FILE\nTokens are saved in private files, never printed. Pairing codes expire after 15 minutes; established credentials do not expire.\n`);
   }
 } catch (error) { process.stderr.write(error.message + '\n'); process.exitCode = 1; }
