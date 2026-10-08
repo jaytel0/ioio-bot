@@ -2,7 +2,7 @@ import { OAuthProvider, OAuthError, AuthorizationError, authorizationErrorRedire
 import { verifyGoogleIdentity } from './google';
 import { ApiError, bearer, equal, hash, json, randomToken, requireThat, type Env, type Row } from './shared';
 import { createBackup, restoreBackup } from './recovery';
-import { escape, sitePage, landing, dashboard, setupMessage } from './ui';
+import { escape, sitePage, landing, dashboard, setupMessage, authorizationReturn } from './ui';
 import { agentGuidance } from './agent-guidance';
 
 const cookie = (request: Request, name: string) => request.headers.get('Cookie')?.split(';').map(x => x.trim()).find(x => x.startsWith(name + '='))?.slice(name.length + 1) ?? '';
@@ -76,8 +76,8 @@ async function selectAgent(request: Request, env: Env) {
   await env.OAUTH_KV.delete(key);
   const userId = 'google-' + pending.subject;
   const result = await env.OAUTH_PROVIDER.completeAuthorization({ request: pending.request, userId, scope: ['btb'], metadata: { agent_id: agent.id }, props: { agent_id: agent.id, owner_id: session.owner_id, userId }, revokeExistingGrants: false });
-  const headers = new Headers({ Location: result.redirectTo }); headers.append('Set-Cookie', cookieValue('__Host-btb-select', '', 0));
-  return new Response(null, { status: 302, headers });
+  const headers = new Headers(); headers.append('Set-Cookie', cookieValue('__Host-btb-select', '', 0));
+  return authorizationReturn(result.redirectTo, headers);
 }
 async function ownerPortal(request: Request, env: Env) {
   const url = new URL(request.url), path = url.pathname;

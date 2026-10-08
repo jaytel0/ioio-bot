@@ -4,15 +4,32 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { build } from 'esbuild';
+import { runInNewContext } from 'node:vm';
 import { generateKeyPair, exportJWK, createLocalJWKSet, SignJWT } from 'jose';
 const directory = await mkdtemp(join(tmpdir(), 'btb-security-'));
-let verifyGoogleIdentity, sealBackup, openBackup, readLimitedText, createBackup;
+let verifyGoogleIdentity, sealBackup, openBackup, readLimitedText, createBackup, authorizationReturn;
 before(async () => {
   const file = join(directory, 'security.mjs');
-  await build({ stdin: { contents: "export { verifyGoogleIdentity } from './src/google'; export { sealBackup, openBackup, createBackup } from './src/recovery'; export { readLimitedText } from './src/shared';", resolveDir: process.cwd() }, outfile: file, bundle: true, platform: 'node', format: 'esm' });
-  ({ verifyGoogleIdentity, sealBackup, openBackup, readLimitedText, createBackup } = await import(file));
+  await build({ stdin: { contents: "export { verifyGoogleIdentity } from './src/google'; export { sealBackup, openBackup, createBackup } from './src/recovery'; export { readLimitedText } from './src/shared'; export { authorizationReturn } from './src/ui';", resolveDir: process.cwd() }, outfile: file, bundle: true, platform: 'node', format: 'esm' });
+  ({ verifyGoogleIdentity, sealBackup, openBackup, readLimitedText, createBackup, authorizationReturn } = await import(file));
 });
 after(() => rm(directory, { recursive: true, force: true }));
+test('OAuth return navigates the exact approved callback without widening form permissions or leaking referrers', async () => {
+  const target = 'https://client.example/callback?code=fixture&state=</script><script>bad()</script>';
+  const response = authorizationReturn(target, new Headers({ 'Set-Cookie': 'fixture=; Max-Age=0' }));
+  const html = await response.text(), csp = response.headers.get('content-security-policy');
+  assert.equal(response.status, 200); assert.equal(response.headers.get('location'), null);
+  assert(csp.includes("form-action 'self'")); assert(!csp.includes('client.example'));
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('set-cookie'), 'fixture=; Max-Age=0');
+  assert(!html.includes('</script><script>bad()'));
+  const [, nonce, script] = html.match(/<script nonce="([^"]+)">([\s\S]*?)<\/script>/);
+  assert(csp.includes(`'nonce-${nonce}'`));
+  let destination; runInNewContext(script, { location: { replace: value => { destination = value; } } });
+  assert.equal(destination, target);
+  assert(html.includes('href="https://client.example/callback?code=fixture&#38;state=&#60;/script&#62;'));
+});
 test('Google sign-in rejects wrong signatures, audience, nonce, issuer, expiration and unverified email', async () => {
   const { privateKey, publicKey } = await generateKeyPair('RS256'), jwk = await exportJWK(publicKey);
   jwk.kid = 'test'; const keys = createLocalJWKSet({ keys: [jwk] });

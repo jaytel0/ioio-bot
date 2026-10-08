@@ -32,7 +32,7 @@ export async function serve(request: Request, env: Env, ctx: ExecutionContext): 
     const response = asset ?? await oauthProvider(env).fetch(request, env, ctx);
     if (response.status === 101) return response;
     const headers = new Headers(response.headers);
-    headers.set('X-Content-Type-Options', 'nosniff'); headers.set('Referrer-Policy', headers.get('Content-Type')?.includes('text/html') ? 'same-origin' : 'no-referrer');
+    headers.set('X-Content-Type-Options', 'nosniff'); headers.set('Referrer-Policy', headers.get('Referrer-Policy') ?? (headers.get('Content-Type')?.includes('text/html') ? 'same-origin' : 'no-referrer'));
     if (!asset) headers.set('Cache-Control', 'no-store'); headers.set('Vary', 'Origin');
     if (url.protocol === 'https:') headers.set('Strict-Transport-Security', 'max-age=31536000');
     if (origin) headers.set('Access-Control-Allow-Origin', origin);

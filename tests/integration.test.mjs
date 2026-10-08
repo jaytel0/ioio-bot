@@ -60,6 +60,14 @@ export default { async fetch(request, env, ctx) {
       return Response.json(await oauthHelpers(env).completeAuthorization({request:parsed,userId:'fixture-user',scope:['btb'],metadata:{agent_id:agent.id},props:{agent_id:agent.id,owner_id:'home',userId:'fixture-user'},revokeExistingGrants:false}));
     }
     if (url.pathname === '/__test/owner-session') { const owner=await hub.googleOwner('portal-fixture','portal@example.com');const token=crypto.randomUUID(),csrf=crypto.randomUUID();await env.OAUTH_KV.put('owner-session:'+await hash(token),JSON.stringify({...owner,csrf,expires_at:Date.now()+60000}));return Response.json({token,csrf}); }
+    if (url.pathname === '/__test/selection-session') {
+      const parsed = await oauthHelpers(env).parseAuthRequest(new Request(env.BTB_BASE_URL + '/oauth/authorize' + url.search));
+      const owner = await hub.googleOwner('selection-fixture','selection@example.com');
+      const token = crypto.randomUUID(), csrf = crypto.randomUUID(), handle = crypto.randomUUID();
+      await env.OAUTH_KV.put('owner-session:' + await hash(token), JSON.stringify({...owner,csrf,expires_at:Date.now()+60000}));
+      await env.OAUTH_KV.put('agent-selection:' + await hash(handle), JSON.stringify({request:parsed,owner_id:owner.owner_id,subject:owner.subject}));
+      return Response.json({token,csrf,handle});
+    }
     if (url.pathname === '/__test/google-owner') { const input = await request.json(); return Response.json(await hub.googleOwner(input.subject,input.email)); }
     if (url.pathname === '/__test/strict-gate') { const gate=env.REQUEST_GATES.get(env.REQUEST_GATES.idFromName('strict-fixture')); return Response.json(await Promise.all([gate.consume(true,{requests:2,auth:2}),gate.consume(true,{requests:2,auth:2}),gate.consume(true,{requests:2,auth:2})])); }
     if (url.pathname === '/__test/edge-deny') return serve(new Request(env.BTB_BASE_URL+'/v1/me'), {...env,EDGE_RATE_LIMITER:{limit:async()=>({success:false})},HUB:{get:()=>{throw new Error('Database reached')}}},ctx);
@@ -268,6 +276,22 @@ test('landing, setup documentation and signed-out actions keep credentials priva
   assert(r.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
   const setup=await fetch(base+'/owner/setup',{method:'POST',body:new URLSearchParams({csrf:'invalid'})});assert.equal(setup.status,401);
   const docs=await fetch(base+'/setup');assert.equal(docs.status,200);assert((await docs.text()).includes('does not wake your model'));
+});
+
+test('approved OAuth selection returns a protected callback document and cannot be replayed', async () => {
+  const redirect = 'https://www.client.example/callback', c = await api('/oauth/register', {client_name:'Fixture',redirect_uris:[redirect],token_endpoint_auth_method:'none'}, '', 201);
+  const q = new URLSearchParams({client_id:c.client_id,redirect_uri:redirect,response_type:'code',resource:base+'/mcp',scope:'btb',code_challenge_method:'S256',code_challenge:createHash('sha256').update('v'.repeat(48)).digest('base64url'),state:'callback-check'});
+  const session = await api('/__test/selection-session?' + q);
+  const headers = {Cookie:'__Host-btb-owner='+session.token+'; __Host-btb-select='+session.handle, Origin:base};
+  const response = await fetch(base+'/oauth/select', {method:'POST',headers,body:new URLSearchParams({csrf:session.csrf,name:'selection-fixture'}),redirect:'manual'});
+  assert.equal(response.status,200); assert.equal(response.headers.get('location'),null);
+  assert.equal(response.headers.get('referrer-policy'),'no-referrer');
+  assert(response.headers.get('content-security-policy').includes("form-action 'self'"));
+  assert(!response.headers.get('content-security-policy').includes('client.example'));
+  const html = await response.text(); assert(html.includes('location.replace("https://www.client.example/callback?')); assert(html.includes('state=callback-check'));
+  assert(response.headers.get('set-cookie').includes('__Host-btb-select=;'));
+  const replay = await fetch(base+'/oauth/select',{method:'POST',headers,body:new URLSearchParams({csrf:session.csrf,name:'selection-fixture'}),redirect:'manual'});
+  assert.equal(replay.status,401);
 });
 
 test('owner website requires a session and CSRF before copying setup permissions', async () => {
