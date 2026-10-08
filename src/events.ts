@@ -22,7 +22,7 @@ export class Events {
     // provider adapter. Clients cannot supply destinations or provider secrets.
     if (!routine || principal.kind !== 'oauth' || !principal.family || principal.agent_id !== routine.agentId || principal.owner_id !== 'home') return;
     this.routineURL(routine.url);
-    this.hub.db.run("INSERT INTO subscriptions (id,agent_id,callback_url,grant_family,secret,directed_only,expires_at) VALUES ('grok_routine',?,?,?,'',1,NULL) ON CONFLICT(id) DO UPDATE SET callback_url=excluded.callback_url,grant_family=excluded.grant_family", routine.agentId, routine.url, principal.family);
+    this.hub.db.run("INSERT INTO subscriptions (id,agent_id,callback_url,grant_family,secret,directed_only,expires_at,event_name) VALUES ('grok_routine',?,?,?,'',1,NULL,?) ON CONFLICT(id) DO UPDATE SET callback_url=excluded.callback_url,grant_family=excluded.grant_family,event_name=excluded.event_name", routine.agentId, routine.url, principal.family, eventName);
   }
   private validateCallback(uri: string) {
     const url = new URL(uri);

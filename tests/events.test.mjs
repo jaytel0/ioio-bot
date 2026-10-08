@@ -103,11 +103,12 @@ test('Grok adapter binds only configured OAuth identity and retries authenticate
   const identity = { ...principal, kind:'oauth', family:'user:grant', owner_id:'home' };
   f.events.bindGrokRoutine(identity); f.events.bindGrokRoutine(identity);
   assert.equal(f.db.one('SELECT COUNT(*) AS n FROM subscriptions').n,1);
+  assert.equal(f.db.one('SELECT event_name FROM subscriptions').event_name,'ioio.message.created');
   assert(!JSON.stringify(f.db.export()).includes('fixture-key'));
   let fail = true;
   t.mock.method(globalThis,'fetch',async (url,init) => {
     assert.equal(url,f.hub.grokRoutine.url); assert.equal(init.headers.Authorization,'Bearer fixture-key'); assert.equal(init.redirect,'error');
-    calls.push(JSON.parse(init.body)); assert(!init.body.includes('private message'));
+    calls.push(JSON.parse(init.body)); assert.equal(calls.at(-1).name,'ioio.message.created'); assert(!init.body.includes('private message'));
     return new Response(null,{status:fail ? 503 : 200});
   });
   f.db.run("INSERT INTO messages (seq,sender,target,text,kind,thread_id,client_message_id,mentions,hop_count,created_at) VALUES (1,'A-000-000-002','A-000-000-001','private message','request','thread','key','[]',0,'2026-10-07T12:00:00Z')");

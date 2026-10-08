@@ -22,9 +22,9 @@
     "BTB_COMPAT_ORIGINS": "https://btb.molly-codex.workers.dev,https://ioio-bot.molly-codex.workers.dev",
     "BTB_OWNER_EMAIL": "jaytel@materic.inc",
     "BTB_ALLOWED_ORIGINS": "https://chatgpt.com",
-    "GROKBOT_AGENT_ID": "A-275-304-092",
-    "GROKBOT_WEBHOOK_URL": "https://api2.cursor.sh/automations/webhook/958adc3e-fa00-5e0e-b04f-a273b5c1d0e4",
-    "GROKBOT_WEBHOOK_ENABLED": "false"
+    "GROKBOT_AGENT_ID": "A-050-105-986",
+    "GROKBOT_WEBHOOK_URL": "https://api2.cursor.sh/automations/webhook/d6ed5853-4f77-537d-aa36-fa2bb896f368",
+    "GROKBOT_WEBHOOK_ENABLED": "true"
   },
   "triggers": { "crons": ["15 9 * * *"] },
   "observability": {
