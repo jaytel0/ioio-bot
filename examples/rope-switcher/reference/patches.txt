@@ -1,0 +1,1221 @@
+4273369121885256472 handle1 (builtin.layer.layer)
+  Enable = True
+  Position = ← Position [1318455978209982175] . Position
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 60.0}, 'y': {'value': 60.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  Clip Content = False
+  Background = {'float4Val': {'x': 0.5, 'y': 0.5, 'z': 0.5, 'w': 0.0}}
+  Opacity = 1.0
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Layout = False
+  Direction = {}
+  Alignment = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Spacing = {'spacingVec2Val': {'x': {}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Cap & Baseline = False
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = ← Scale [3119926961581977174] . Scale
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+10757729718408900694 Drag (origami.drag)
+  Enable = True
+  Layer = {'unstructuredVal': {'type': 'ID', 'intVal': -5042398269507066940}}
+  Start = ← Variable Receiver [10612332852379999256] . None
+  Reset = ← Pulse [16288756931135977542] . Turned On
+  Settings = ← Drag Settings [1029279476147293015] . Settings
+
+1318455978209982175 Position (builtin.layer.binding)
+  Position = ← Transition [8236361961331937492] . None
+
+3838285558506068285 Drag (origami.drag)
+  Enable = True
+  Layer = {'unstructuredVal': {'type': 'INTEGER', 'intVal': 4273369121885256472}}
+  Start = ← Variable Receiver [14575235930432607522] . None
+  Reset = ← Pulse [13710885823329820406] . Turned On
+  Settings = ← Drag Settings [1029279476147293015] . Settings
+
+9675177353130786963 + (builtin.math.add)
+  None = ← Convert Position [10038490446046129891] . None
+  None = ← Convert Position [7209832488553655580] . None
+
+1389706592374821237 ∕ (builtin.math.div)
+  None = ← + [9675177353130786963] . None
+  None = {'float2Val': {'x': 2.0, 'y': 2.0}}
+
+9964377468805987439 + (builtin.math.add)
+  None = ← Variable Receiver [16378230399498452125] . None
+  None = ← Point [5351296837729511841] . None
+
+9388365339165864028 Path Builder (com.lukehaddock.shapetools.PathBuilder)
+  type = {'intVal': 1}
+  point = ← Pop Animation [4199208427077204061] . Progress
+  curveFrom = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  curveTo = {'float2Val': {'x': 0.0, 'y': 0.0}}
+
+13349423039149065405 Path Builder to Shape (com.lukehaddock.shapetools.PathBuildertoShape)
+  Path Array = ← Array Join [3047880444736531463] . None
+  Coordinate Space = {'float2Val': {'x': 1.0, 'y': 1.0}}
+
+7062129412623230955 line start (com.lukehaddock.shapetools.PathBuilder)
+  type = {}
+  point = ← Convert Position [7209832488553655580] . None
+  curveFrom = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  curveTo = {'float2Val': {'x': 0.0, 'y': 0.0}}
+
+3047880444736531463 Array Join (builtin.structure.array.join)
+  None = ← line start [7062129412623230955] . Path Array
+  None = ← Path Builder [9388365339165864028] . Path Array
+  None = ← line end [2885329234095084241] . Path Array
+
+2885329234095084241 line end (com.lukehaddock.shapetools.PathBuilder)
+  type = {'intVal': 1}
+  point = ← Convert Position [10038490446046129891] . None
+  curveFrom = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  curveTo = {'float2Val': {'x': 0.0, 'y': 0.0}}
+
+2108723629215564224 Curve Shape (com.lukehaddock.shapetools.CurveShape)
+  Shape = ← Path Builder to Shape [13349423039149065405] . Shape
+  Curve Amount = ← Transition [13133075155634587904] . None
+
+2904262188219655576 distance between points (builtin.javascript.expression)
+  None = {'intVal': -3798160683561809895}
+  x1 = ← handle1 converted pos [7731231020551872333] . X
+  x2 = ← handle2 converted pos [13186866285591145349] . X
+  y1 = ← handle1 converted pos [7731231020551872333] . Y
+  y2 = ← handle2 converted pos [13186866285591145349] . Y
+
+7731231020551872333 handle1 converted pos (builtin.getPoint)
+  None = ← Convert Position [10038490446046129891] . None
+
+13186866285591145349 handle2 converted pos (builtin.getPoint)
+  None = ← Convert Position [7209832488553655580] . None
+
+4199208427077204061 Pop Animation (builtin.bouncy)
+  Number = ← + [9964377468805987439] . None
+  Bounciness = 10.0
+  Speed = 5.0
+
+1029279476147293015 Drag Settings (origami.drag-settings)
+  Clip = True
+  Min = {'float2Val': {'x': -160.0, 'y': -600.0}}
+  Max = {'float2Val': {'x': 170.0, 'y': 600.0}}
+  Momentum = False
+  Momentum Friction = 8.0
+
+4972892819643453385 cable shadow 2 (com.lukehaddock.shapetools.AdvancedShape)
+  Enable = True
+  Position = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {}, 'y': {}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  Shape = ← Shape [10037771779054967309] . Shape
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Opacity = 1.0
+  Layout = False
+  Direction = {}
+  Alignment = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Spacing = {'spacingVec2Val': {'x': {}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = ← Color [5858015288744908774] . Color
+  Width = 3.0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = 0
+  Radius = 0
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+
+10037771779054967309 Shape (builtin.layer.binding)
+  Shape = ← Curve Shape [11890890834587958407] . Shape
+
+7875508246339558415 cable (com.lukehaddock.shapetools.AdvancedShape)
+  Enable = True
+  Position = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'type': 'PERCENTAGE', 'value': 1.0}, 'y': {'type': 'PERCENTAGE', 'value': 1.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  Shape = ← Shape [954773490355349943] . Shape
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Opacity = ← Opacity [12342761717520803475] . Opacity
+  Layout = False
+  Direction = {}
+  Alignment = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Spacing = {'spacingVec2Val': {'x': {}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = ← Color [14719563189675105812] . Color
+  Width = 6.0
+  Start = 0
+  End = 1.0
+  Line Cap = {'intVal': 1}
+  Line Join = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = 0
+  Radius = 1.0
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+
+954773490355349943 Shape (builtin.layer.binding)
+  Shape = ← Curve Shape [2108723629215564224] . Shape
+
+11890890834587958407 Curve Shape (com.lukehaddock.shapetools.CurveShape)
+  Shape = ← Path Builder to Shape [7282050280139440642] . Shape
+  Curve Amount = ← Transition [13133075155634587904] . None
+
+7282050280139440642 Path Builder to Shape (com.lukehaddock.shapetools.PathBuildertoShape)
+  Path Array = ← Array Join [362918473275055522] . None
+  Coordinate Space = {'float2Val': {'x': 1.0, 'y': 1.0}}
+
+12470269425042309625 Path Builder (com.lukehaddock.shapetools.PathBuilder)
+  type = {'intVal': 1}
+  point = ← extra shadow offset [1606653291929256483] . None
+  curveFrom = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  curveTo = {'float2Val': {'x': 0.0, 'y': 0.0}}
+
+362918473275055522 Array Join (builtin.structure.array.join)
+  None = ← line start [7062129412623230955] . Path Array
+  None = ← Path Builder [12470269425042309625] . Path Array
+  None = ← line end [2885329234095084241] . Path Array
+
+1606653291929256483 extra shadow offset (builtin.math.add)
+  None = ← Pop Animation [4199208427077204061] . Progress
+  None = {'float2Val': {'x': 0.0, 'y': 10.0}}
+
+8957151686084247544 cable end 1 (builtin.layer.ellipse)
+  Enable = True
+  Position = ← Position [17673106776339005359] . Position
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 12.0}, 'y': {'value': 12.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  Color = ← Color [9820601855315812435] . Color
+  Opacity = 1.0
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = ← Scale [597343236132634902] . Scale
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+17673106776339005359 Position (builtin.layer.binding)
+  Position = ← Transition [8236361961331937492] . None
+
+6557373722053099070 cable end 2 (builtin.layer.ellipse)
+  Enable = True
+  Position = ← Position [9818103175362968698] . Position
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 12.0}, 'y': {'value': 12.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  Color = ← Color [3839326108206487448] . Color
+  Opacity = 1.0
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = ← Scale [6435457478829350850] . Scale
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+9818103175362968698 Position (builtin.layer.binding)
+  Position = ← Transition [2612699129724532749] . None
+
+15946175864787661712 cable remainder (builtin.math.sub)
+  None = ← max length [14577184046273715173] . None
+  None = ← distance between points [2904262188219655576] . None
+
+14577184046273715173 max length (builtin.splitter)
+  None = 280.0
+
+5351296837729511841 Point (builtin.point)
+  X = 0
+  Y = ← ∕ [12917048919035981550] . None
+
+12917048919035981550 ∕ (builtin.math.div)
+  None = ← + [16951549057937386287] . None
+  None = 2.0
+
+16951549057937386287 + (builtin.math.add)
+  None = ← Clip [2396725207883248197] . None
+  None = 10.0
+
+2396725207883248197 Clip (builtin.range)
+  Value = ← cable remainder [15946175864787661712] . None
+  Min = 0
+  Max = ← max length [14577184046273715173] . None
+
+2253639088634918698 panel (builtin.layer.layer)
+  Enable = True
+  Position = ← Point 3D [16448360489443357598] . None
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 390.0}, 'y': {'value': 270.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 1.0}}
+  Clip Content = False
+  Background = {'float4Val': {'x': 0.5, 'y': 0.5, 'z': 0.5, 'w': 0.0}}
+  Opacity = ← Opacity [12630290419346862949] . Opacity
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Layout = False
+  Direction = {}
+  Alignment = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Spacing = {'spacingVec2Val': {'x': {}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Cap & Baseline = False
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = ← Scale [4919360225160743639] . Scale
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 1.0, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+10038490446046129891 Convert Position (builtin.layer.convertPosition)
+  From Parent = {'unstructuredVal': {'type': 'INTEGER', 'intVal': 2253639088634918698}}
+  None = ← Transition [8236361961331937492] . None
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  To Parent = {'unstructuredVal': {'type': 'ID'}}
+  To Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+
+7209832488553655580 Convert Position (builtin.layer.convertPosition)
+  From Parent = {'unstructuredVal': {'type': 'INTEGER', 'intVal': 2253639088634918698}}
+  None = ← Transition [2612699129724532749] . None
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  To Parent = {'unstructuredVal': {'type': 'ID'}}
+  To Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+
+10467848686309843688 panel base (builtin.layer.image)
+  Enable = True
+  Position = {'float3Val': {'x': -0.0, 'y': -10.0, 'z': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 490.0}, 'y': {'value': 387.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  URL = {'strVal': ''}
+  Image = {'intVal': 5568782900328954216}
+  Fill Style = {}
+  Opacity = 1.0
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+15801681291277863893 Image File (builtin.layer.image)
+  Enable = True
+  Position = {'float3Val': {'x': 8.0, 'y': 8.0, 'z': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 90.0}, 'y': {'value': 90.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  URL = {'strVal': ''}
+  Image = {'intVal': -990126340545076547}
+  Fill Style = {}
+  Opacity = 1.0
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+13404345804202484676 handle2 (builtin.layer.layer)
+  Enable = True
+  Position = ← Position [15152600482544775446] . Position
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 60.0}, 'y': {'value': 60.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  Clip Content = False
+  Background = {'float4Val': {'x': 0.5, 'y': 0.5, 'z': 0.5, 'w': 0.0}}
+  Opacity = 1.0
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Layout = False
+  Direction = {}
+  Alignment = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Spacing = {'spacingVec2Val': {'x': {}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Cap & Baseline = False
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = ← Scale [453687243217322644] . Scale
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+6485494108690764553 Image File (builtin.layer.image)
+  Enable = True
+  Position = {'float3Val': {'x': 8.0, 'y': 8.0, 'z': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 90.0}, 'y': {'value': 90.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  URL = {'strVal': ''}
+  Image = {'intVal': -990126340545076547}
+  Fill Style = {}
+  Opacity = 1.0
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+15152600482544775446 Position (builtin.layer.binding)
+  Position = ← Transition [2612699129724532749] . None
+
+2904369215870486181 shadow (builtin.layer.layer)
+  Enable = True
+  Position = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'type': 'PERCENTAGE', 'value': 1.0}, 'y': {'type': 'PERCENTAGE', 'value': 1.0}}}
+  Anchor = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Clip Content = True
+  Background = {'float4Val': {'x': 0.5, 'y': 0.5, 'z': 0.5, 'w': 0.0}}
+  Opacity = ← Opacity [12196079999396803276] . Opacity
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Layout = False
+  Direction = {}
+  Alignment = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Spacing = {'spacingVec2Val': {'x': {}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Cap & Baseline = False
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {'intVal': 9}
+  Effects = ← Effects [11910201659770697899] . Effects
+
+11910201659770697899 Effects (builtin.layer.binding)
+  Filters Effects = ← Blur Effect [1388955119953552971] . Layer Effect
+
+1388955119953552971 Blur Effect (builtin.blurLayerEffect)
+  Radius = 10.0
+
+3839326108206487448 Color (builtin.layer.binding)
+  Color = ← Transition [9605826025331062259] . None
+
+9605826025331062259 Transition (builtin.transition)
+  Progress = ← Pop Animation [9314304170814464460] . Progress
+  Start = ← Pop Animation [3549301755897673306] . Progress
+  End = {'float4Val': {'x': 0.46453125, 'y': 0.46453125, 'z': 0.46453125, 'w': 1.0}}
+
+3189070027471015841 Interaction (builtin.layer.interaction)
+  Layer = {'unstructuredVal': {'type': 'ID', 'intVal': -5042398269507066940}}
+  Enable = True
+
+1247375153531426583 Or (builtin.logic.or)
+  None = ← Interaction [3189070027471015841] . Down
+  None = ← Interaction [6144059922564377652] . Down
+
+6144059922564377652 Interaction (builtin.layer.interaction)
+  Layer = {'unstructuredVal': {'type': 'INTEGER', 'intVal': 4273369121885256472}}
+  Enable = True
+
+9314304170814464460 Pop Animation (builtin.bouncy)
+  Number = ← Or [1247375153531426583] . None
+  Bounciness = 5.0
+  Speed = 10.0
+
+9820601855315812435 Color (builtin.layer.binding)
+  Color = ← Transition [9605826025331062259] . None
+
+14719563189675105812 Color (builtin.layer.binding)
+  Stroke Color = ← Transition [9605826025331062259] . None
+
+8236361961331937492 Transition (builtin.transition)
+  Progress = ← Reverse Progress [5498581433304152979] . Progress
+  Start = ← Drag [3838285558506068285] . Position
+  End = ← Variable Receiver [14575235930432607522] . None
+
+5281565778404066690 Option Picker (builtin.multiplexer)
+  Option = ← Greater Than [20475168287000526] . None
+  None = {'float2Val': {'x': -53.0, 'y': -33.0}}
+  None = {'float2Val': {'x': -53.0, 'y': 8.0}}
+
+17747477556908155729 Interaction (builtin.layer.interaction)
+  Layer = {'unstructuredVal': {'type': 'INTEGER', 'intVal': 4273369121885256472}}
+  Enable = True
+
+14430204458343841407 Pop Animation (builtin.bouncy)
+  Number = ← Interaction [17747477556908155729] . Down
+  Bounciness = 3.0
+  Speed = 30.0
+
+5498581433304152979 Reverse Progress (origami.reverseProgress)
+  Progress = ← Pop Animation [14430204458343841407] . Progress
+
+13710885823329820406 Pulse (builtin.pulse)
+  On / Off = ← Delay [5713773399282851662] . Value
+
+13569292553704560620 Pop Animation (builtin.bouncy)
+  Number = ← Option Picker [5281565778404066690] . None
+  Bounciness = 3.0
+  Speed = 30.0
+
+5713773399282851662 Delay (builtin.delay)
+  Value = ← Interaction [17747477556908155729] . Down
+  Duration = 0.4
+  Style = {'intVal': 2}
+
+5570790336410940571 Point Unpack (builtin.getPoint)
+  None = ← Variable Receiver [8234554843678303768] . None
+
+20475168287000526 Greater Than (builtin.compare.gt)
+  None = ← Point Unpack [5570790336410940571] . Y
+  None = 0
+
+14645964474045917124 levels (builtin.layer.image)
+  Enable = True
+  Position = {'float3Val': {'x': -32.0, 'y': 18.0, 'z': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 41.333333333333}, 'y': {'value': 5.333333333333}}}
+  Anchor = {'float2Val': {'x': 1.0, 'y': 0.0}}
+  URL = {'strVal': ''}
+  Image = {'intVal': -2212161960003545551}
+  Fill Style = {}
+  Opacity = 1.0
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+7372132278753194459 levels (builtin.layer.layer)
+  Enable = True
+  Position = {'float3Val': {'x': -32.0, 'y': 19.0, 'z': 0.0}}
+  Position Type = False
+  Size = {'dimensionVec2Val': {'x': {'type': 'AUTO'}, 'y': {'type': 'AUTO'}}}
+  Anchor = {'float2Val': {'x': 1.0, 'y': 0.0}}
+  Clip Content = False
+  Background = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Opacity = 1.0
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Layout = True
+  Direction = {'intVal': 1}
+  Alignment = {'float2Val': {'x': 1.0, 'y': 0.5}}
+  Spacing = {'spacingVec2Val': {'x': {'value': 5.0}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Cap & Baseline = False
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Opacity = 0
+  Radius = 0
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+4706044509934261053 Ellipse 12 (builtin.layer.ellipse)
+  Enable = ← Enable [10324106187929475307] . Enable
+  Position = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Position Type = False
+  Size = {'dimensionVec2Val': {'x': {'value': 4.0}, 'y': {'value': 4.0}}}
+  Anchor = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 1.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = ← Opacity [16591266595653623457] . Opacity
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.316666662693, 'y': 0.316666662693, 'z': 0.316666662693, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 2}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Opacity = 0
+  Radius = 0
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+5279431579336329755 Loop (builtin.loop)
+  Count = {'intVal': 5}
+
+13565642311652506797 Greater Than (builtin.compare.gt)
+  None = ← Loop [5279431579336329755] . Index
+  None = {'intVal': -1}
+
+10324106187929475307 Enable (builtin.layer.binding)
+  Enable = ← Greater Than [13565642311652506797] . None
+
+10757654494735493839 Random (builtin.random)
+  Randomize = ← Repeating Pulse [3334452610912278817] . None
+  Start Value = 0
+  End Value = 1.0
+
+3334452610912278817 Repeating Pulse (builtin.repeatingPulse)
+  Frequency = ← Transition [1678648863204970062] . None
+
+4777251405025590407 Transition (builtin.transition)
+  Progress = ← Random [10757654494735493839] . Value
+  Start = 0
+  End = 5.0
+
+16807785012445858459 Round (builtin.math.round)
+  None = ← Transition [4777251405025590407] . None
+
+5424860049121297477 Less Than (builtin.compare.lt)
+  None = ← Loop [5279431579336329755] . Index
+  None = ← Round [16807785012445858459] . Rounded
+
+16591266595653623457 Opacity (builtin.layer.binding)
+  Opacity = ← Classic Animation [6792046473624411091] . None
+
+6792046473624411091 Classic Animation (builtin.classicAnimation)
+  Number = ← And [13496823627495042703] . None
+  Duration = 0.1
+  Curve = {'intVal': 6}
+
+4919360225160743639 Scale (builtin.layer.binding)
+  Transform Scale = ← Transition [3694550726963001279] . None
+
+6002601628139689755 Pop Animation (builtin.bouncy)
+  Number = ← Switch [5333744366919074305] . On / Off
+  Bounciness = 3.0
+  Speed = 30.0
+
+3694550726963001279 Transition (builtin.transition)
+  Progress = ← Pop Animation [6002601628139689755] . Progress
+  Start = 0.9
+  End = 1.0
+
+16448360489443357598 Point 3D (builtin.point3D)
+  X = 0
+  Y = ← Position [1604791547099900471] . Position
+  Z = 0
+
+1604791547099900471 Position (builtin.layer.binding)
+  Position Y = ← Transition [1966897557552596566] . None
+
+1966897557552596566 Transition (builtin.transition)
+  Progress = ← Pop Animation [6002601628139689755] . Progress
+  Start = -69.0
+  End = -79.0
+
+12630290419346862949 Opacity (builtin.layer.binding)
+  Opacity = ← Pop Animation [6002601628139689755] . Progress
+
+12342761717520803475 Opacity (builtin.layer.binding)
+  Opacity = ← Pop Animation [6002601628139689755] . Progress
+
+12196079999396803276 Opacity (builtin.layer.binding)
+  Opacity = ← Pop Animation [6002601628139689755] . Progress
+
+3409012505180928964 button (builtin.hitArea)
+  Enable = True
+  Position = {'float3Val': {'x': 0.0, 'y': -37.0, 'z': 0.0}}
+  Position Type = {'intVal': 1}
+  Size = {'dimensionVec2Val': {'x': {'value': 50.0}, 'y': {'value': 50.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 1.0}}
+  Setup Mode = False
+
+5783330078981079429 Interaction (builtin.layer.interaction)
+  Layer = {'unstructuredVal': {'type': 'INTEGER', 'intVal': 3409012505180928964}}
+  Enable = True
+
+15369001995393254455 transition helper (builtin.layer.layer)
+  Enable = True
+  Position = ← Point 3D [3623615521594529209] . None
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 370.0}, 'y': {'value': 270.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 1.0}}
+  Clip Content = True
+  Background = {'float4Val': {'x': 1.0, 'y': 1.0, 'z': 1.0, 'w': 0.3}}
+  Opacity = ← Opacity [12485331649634720436] . Opacity
+  Radius = ← Radius [2974356153178048696] . Radius
+  Layout = False
+  Direction = {}
+  Alignment = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Spacing = {'spacingVec2Val': {'x': {}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Cap & Baseline = False
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = ← Scale [7658143911882489677] . Scale
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 1.0, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+2974356153178048696 Radius (builtin.layer.binding)
+  Radius = ← ∕ [14142367797598723260] . None
+
+17097064339979277363 Pop Animation (builtin.bouncy)
+  Number = ← Interaction [5783330078981079429] . Down
+  Bounciness = 5.0
+  Speed = 30.0
+
+12485331649634720436 Opacity (builtin.layer.binding)
+  Opacity = ← Pop Animation [17097064339979277363] . Progress
+
+16807594038938252690 Transition (builtin.transition)
+  Progress = ← Pop Animation [10881523926896895647] . Progress
+  Start = -38.0
+  End = -90.0
+
+5333744366919074305 Switch (builtin.switch)
+  Flip = ← Interaction [5783330078981079429] . Tap
+  Turn On = False
+  Turn Off = False
+
+10881523926896895647 Pop Animation (builtin.bouncy)
+  Number = ← Switch [5333744366919074305] . On / Off
+  Bounciness = 3.0
+  Speed = 40.0
+
+7658143911882489677 Scale (builtin.layer.binding)
+  Transform Scale = ← Transition [3047167443266851933] . None
+
+3047167443266851933 Transition (builtin.transition)
+  Progress = ← Pop Animation [10881523926896895647] . Progress
+  Start = ← Transition [16019298499440518904] . None
+  End = 1.0
+
+16019298499440518904 Transition (builtin.transition)
+  Progress = ← Pop Animation [17097064339979277363] . Progress
+  Start = 0.2
+  End = 0.17
+
+14142367797598723260 ∕ (builtin.math.div)
+  None = 20.0
+  None = ← Transition [3047167443266851933] . None
+
+3623615521594529209 Point 3D (builtin.point3D)
+  X = 0
+  Y = ← Position [10398474242482945472] . Position
+  Z = 0
+
+10398474242482945472 Position (builtin.layer.binding)
+  Position Y = ← Transition [16807594038938252690] . None
+
+6071750394633858087 􀑢 Shape (builtin.layer.shape)
+  Enable = True
+  Position = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Position Type = False
+  Size = {'dimensionVec2Val': {'x': {'value': 105.0}, 'y': {'value': 103.25685}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  Shape = {'pathVal': {'elements': [{'points': [{'x': 0.0, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.0, 'y': 7.957030871883}, {'x': 0.18001302518, 'y': 8.859375391155}, {'x': 0.5400390625, 'y': 9.70703107072}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.904622361064, 'y': 10.554687570897}, {'x': 1.4013671875, 'y': 11.292968853493}, {'x': 2.0302734375, 'y': 11.921874918509}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.121419340372, 'y': 12.017577926163}, {'x': 2.2080078125, 'y': 12.01529908774}, {'x': 2.2900390625, 'y': 11.915039223852}]}, {'instruction': 'LineTo', 'points': [{'x': 2.59765625, 'y': 11.566406487138}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.675130277872, 'y': 11.479818012565}, {'x': 2.6728515625, 'y': 11.393229537993}, {'x': 2.5908203125, 'y': 11.306640242808}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.048502534628, 'y': 10.75065126305}, {'x': 1.6201171875, 'y': 10.103515311261}, {'x': 1.3056640625, 'y': 9.365234028664}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.9912109375, 'y': 8.622395889834}, {'x': 0.833984375, 'y': 7.833984264988}, {'x': 0.833984375, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.833984375, 'y': 6.156901151408}, {'x': 0.993489548564, 'y': 5.363932260021}, {'x': 1.3125, 'y': 4.621093710884}]}, {'instruction': 'CurveTo', 'points': [{'x': 1.636067673564, 'y': 3.878255161748}, {'x': 2.080403715372, 'y': 3.224283925607}, {'x': 2.6455078125, 'y': 2.659179592156}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.215169340372, 'y': 2.089518197317}, {'x': 3.871419131756, 'y': 1.645182247797}, {'x': 4.6142578125, 'y': 1.326171846173}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.361653506756, 'y': 1.002604178007}, {'x': 6.156901180744, 'y': 0.840820292637}, {'x': 7.0, 'y': 0.840820292637}]}, {'instruction': 'CurveTo', 'points': [{'x': 7.843099236488, 'y': 0.840820292637}, {'x': 8.636067986488, 'y': 1.002604178007}, {'x': 9.37890625, 'y': 1.326171846173}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.126302361488, 'y': 1.645182247797}, {'x': 10.782552361488, 'y': 2.089518197317}, {'x': 11.34765625, 'y': 2.659179592156}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.917317986488, 'y': 3.224283925607}, {'x': 12.361653923988, 'y': 3.878255161748}, {'x': 12.6806640625, 'y': 4.621093710884}]}, {'instruction': 'CurveTo', 'points': [{'x': 13.004232048988, 'y': 5.363932260021}, {'x': 13.166015625, 'y': 6.156901151408}, {'x': 13.166015625, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 13.166015625, 'y': 7.833984264988}, {'x': 13.006510138512, 'y': 8.622395889834}, {'x': 12.6875, 'y': 9.365234028664}]}, {'instruction': 'CurveTo', 'points': [{'x': 12.373046875, 'y': 10.103515311261}, {'x': 11.946939826012, 'y': 10.75065126305}, {'x': 11.4091796875, 'y': 11.306640242808}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.3271484375, 'y': 11.393229537993}, {'x': 11.324869513512, 'y': 11.479818012565}, {'x': 11.40234375, 'y': 11.566406487138}]}, {'instruction': 'LineTo', 'points': [{'x': 11.7099609375, 'y': 11.915039223852}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.7919921875, 'y': 12.01529908774}, {'x': 11.878580451012, 'y': 12.017577926163}, {'x': 11.9697265625, 'y': 11.921874918509}]}, {'instruction': 'CurveTo', 'points': [{'x': 12.594075798988, 'y': 11.292968853493}, {'x': 13.088541388512, 'y': 10.554687570897}, {'x': 13.453125, 'y': 9.70703107072}]}, {'instruction': 'CurveTo', 'points': [{'x': 13.817708611488, 'y': 8.859375391155}, {'x': 14.0, 'y': 7.957030871883}, {'x': 14.0, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 14.0, 'y': 6.038411400747}, {'x': 13.817708611488, 'y': 5.136067702086}, {'x': 13.453125, 'y': 4.292968878755}]}, {'instruction': 'CurveTo', 'points': [{'x': 13.093099236488, 'y': 3.449869645119}, {'x': 12.591796875, 'y': 2.707031301135}, {'x': 11.94921875, 'y': 2.064453026192}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.306640625, 'y': 1.417317689862}, {'x': 10.5615234375, 'y': 0.911458334318}, {'x': 9.7138671875, 'y': 0.546875010848}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.870767951012, 'y': 0.182291661735}, {'x': 7.966146111488, 'y': 0.0}, {'x': 7.0, 'y': 0.0}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.033854305744, 'y': 0.0}, {'x': 5.126953125, 'y': 0.182291661735}, {'x': 4.279296875, 'y': 0.546875010848}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.436197847128, 'y': 0.911458334318}, {'x': 2.693359375, 'y': 1.417317689862}, {'x': 2.05078125, 'y': 2.064453026192}]}, {'instruction': 'CurveTo', 'points': [{'x': 1.408203125, 'y': 2.707031301135}, {'x': 0.904622361064, 'y': 3.449869645119}, {'x': 0.5400390625, 'y': 4.292968878755}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.18001302518, 'y': 5.136067702086}, {'x': 0.0, 'y': 6.038411400747}, {'x': 0.0, 'y': 6.999999974738}]}, {'instruction': 'Close'}, {'points': [{'x': 1.9892578125, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 1.9892578125, 'y': 7.660807315842}, {'x': 2.110025972128, 'y': 8.285156524624}, {'x': 2.3515625, 'y': 8.873046780471}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.593099027872, 'y': 9.456380180083}, {'x': 2.92578125, 'y': 9.973633009708}, {'x': 3.349609375, 'y': 10.424804448732}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.436197847128, 'y': 10.520507456386}, {'x': 3.525065243244, 'y': 10.520507456386}, {'x': 3.6162109375, 'y': 10.424804448732}]}, {'instruction': 'LineTo', 'points': [{'x': 3.923828125, 'y': 10.083007406676}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.005859375, 'y': 10.005533465184}, {'x': 4.003580868244, 'y': 9.9166669728}, {'x': 3.9169921875, 'y': 9.816406288301}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.579752743244, 'y': 9.442707970156}, {'x': 3.313150972128, 'y': 9.016601291951}, {'x': 3.1171875, 'y': 8.538086253684}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.92578125, 'y': 8.055012717959}, {'x': 2.830078125, 'y': 7.542317565181}, {'x': 2.830078125, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.830078125, 'y': 6.430338374746}, {'x': 2.937174409628, 'y': 5.894856889267}, {'x': 3.1513671875, 'y': 5.393554697686}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.3701171875, 'y': 4.887695239566}, {'x': 3.6708984375, 'y': 4.443359495199}, {'x': 4.0537109375, 'y': 4.06054705428}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.4365234375, 'y': 3.677734203055}, {'x': 4.878580868244, 'y': 3.376953175321}, {'x': 5.3798828125, 'y': 3.158203150466}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.8857421875, 'y': 2.939453125611}, {'x': 6.42578125, 'y': 2.830078113184}, {'x': 7.0, 'y': 2.830078113184}]}, {'instruction': 'CurveTo', 'points': [{'x': 7.569661736488, 'y': 2.830078113184}, {'x': 8.105142951012, 'y': 2.939453125611}, {'x': 8.6064453125, 'y': 3.158203150466}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.1123046875, 'y': 3.376953175321}, {'x': 9.556640625, 'y': 3.677734203055}, {'x': 9.939453125, 'y': 4.06054705428}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.326822638512, 'y': 4.443359495199}, {'x': 10.627603888512, 'y': 4.887695239566}, {'x': 10.841796875, 'y': 5.393554697686}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.060546875, 'y': 5.894856889267}, {'x': 11.169921875, 'y': 6.430338374746}, {'x': 11.169921875, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.169921875, 'y': 7.542317565181}, {'x': 11.071939826012, 'y': 8.055012717959}, {'x': 10.8759765625, 'y': 8.538086253684}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.6845703125, 'y': 9.016601291951}, {'x': 10.420247673988, 'y': 9.440429952345}, {'x': 10.0830078125, 'y': 9.809570593643}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.0009765625, 'y': 9.905273601296}, {'x': 9.998697638512, 'y': 9.994140914292}, {'x': 10.076171875, 'y': 10.076171712019}]}, {'instruction': 'LineTo', 'points': [{'x': 10.390625, 'y': 10.424804448732}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.477213263512, 'y': 10.520507456386}, {'x': 10.563802361488, 'y': 10.520507456386}, {'x': 10.650390625, 'y': 10.424804448732}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.07421875, 'y': 9.973633009708}, {'x': 11.406900763512, 'y': 9.456380180083}, {'x': 11.6484375, 'y': 8.873046780471}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.889974236488, 'y': 8.285156524624}, {'x': 12.0107421875, 'y': 7.660807315842}, {'x': 12.0107421875, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 12.0107421875, 'y': 6.311849034391}, {'x': 11.880859375, 'y': 5.666992331331}, {'x': 11.62109375, 'y': 5.065429865557}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.361328125, 'y': 4.459309722937}, {'x': 11.001302361488, 'y': 3.926106665574}, {'x': 10.541015625, 'y': 3.465820283163}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.080728888512, 'y': 3.005533900752}, {'x': 9.547525763512, 'y': 2.645507792535}, {'x': 8.94140625, 'y': 2.385742163664}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.335286736488, 'y': 2.121419268253}, {'x': 7.688150763512, 'y': 1.989257717971}, {'x': 7.0, 'y': 1.989257717971}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.307291805744, 'y': 1.989257717971}, {'x': 5.657877743244, 'y': 2.121419268253}, {'x': 5.0517578125, 'y': 2.385742163664}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.4501953125, 'y': 2.645507792535}, {'x': 3.919270694256, 'y': 3.005533900752}, {'x': 3.458984375, 'y': 3.465820283163}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.998697847128, 'y': 3.926106665574}, {'x': 2.638671875, 'y': 4.459309722937}, {'x': 2.37890625, 'y': 5.065429865557}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.119140625, 'y': 5.666992331331}, {'x': 1.9892578125, 'y': 6.311849034391}, {'x': 1.9892578125, 'y': 6.999999974738}]}, {'instruction': 'Close'}, {'points': [{'x': 2.5771484375, 'y': 13.207031468395}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.472330659628, 'y': 13.32096354221}, {'x': 2.444986909628, 'y': 13.441732131294}, {'x': 2.4951171875, 'y': 13.569335594424}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.5498046875, 'y': 13.701497555012}, {'x': 2.656900972128, 'y': 13.767578125}, {'x': 2.81640625, 'y': 13.767578125}]}, {'instruction': 'LineTo', 'points': [{'x': 11.169921875, 'y': 13.767578125}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.329427361488, 'y': 13.767578125}, {'x': 11.434244513512, 'y': 13.701497555012}, {'x': 11.484375, 'y': 13.569335594424}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.5390625, 'y': 13.441732131294}, {'x': 11.516275763512, 'y': 13.32096354221}, {'x': 11.416015625, 'y': 13.207031468395}]}, {'instruction': 'LineTo', 'points': [{'x': 7.287109375, 'y': 8.538086253684}]}, {'instruction': 'CurveTo', 'points': [{'x': 7.209635138512, 'y': 8.446940102265}, {'x': 7.111653923988, 'y': 8.401367436862}, {'x': 6.9931640625, 'y': 8.401367436862}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.874674618244, 'y': 8.401367436862}, {'x': 6.776692569256, 'y': 8.446940102265}, {'x': 6.69921875, 'y': 8.538086253684}]}, {'instruction': 'LineTo', 'points': [{'x': 2.5771484375, 'y': 13.207031468395}]}, {'instruction': 'Close'}, {'points': [{'x': 3.978515625, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.978515625, 'y': 7.360026082955}, {'x': 4.037760555744, 'y': 7.704101963434}, {'x': 4.15625, 'y': 8.032226795563}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.279296875, 'y': 8.355793950846}, {'x': 4.4501953125, 'y': 8.649739489076}, {'x': 4.6689453125, 'y': 8.91406258964}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.7509765625, 'y': 9.014323274139}, {'x': 4.837565243244, 'y': 9.014323274139}, {'x': 4.9287109375, 'y': 8.91406258964}]}, {'instruction': 'LineTo', 'points': [{'x': 5.25, 'y': 8.579101242241}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.327473819256, 'y': 8.50162730075}, {'x': 5.33203125, 'y': 8.412760808365}, {'x': 5.263671875, 'y': 8.312500123866}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.122395694256, 'y': 8.13020864164}, {'x': 5.013020694256, 'y': 7.927409254829}, {'x': 4.935546875, 'y': 7.704101963434}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.858073055744, 'y': 7.480794672039}, {'x': 4.8193359375, 'y': 7.246094009141}, {'x': 4.8193359375, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.8193359375, 'y': 6.603515734198}, {'x': 4.917317569256, 'y': 6.241210787557}, {'x': 5.11328125, 'y': 5.913085955428}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.313801944256, 'y': 5.580403856758}, {'x': 5.578125, 'y': 5.316080756194}, {'x': 5.90625, 'y': 5.120117064042}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.238932430744, 'y': 4.919596515654}, {'x': 6.603515625, 'y': 4.819335831155}, {'x': 7.0, 'y': 4.819335831155}]}, {'instruction': 'CurveTo', 'points': [{'x': 7.396484375, 'y': 4.819335831155}, {'x': 7.7587890625, 'y': 4.919596515654}, {'x': 8.0869140625, 'y': 5.120117064042}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.419596076012, 'y': 5.316080756194}, {'x': 8.683919548988, 'y': 5.580403856758}, {'x': 8.8798828125, 'y': 5.913085955428}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.080403923988, 'y': 6.241210787557}, {'x': 9.1806640625, 'y': 6.603515734198}, {'x': 9.1806640625, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.1806640625, 'y': 7.246094009141}, {'x': 9.141927361488, 'y': 7.480794672039}, {'x': 9.064453125, 'y': 7.704101963434}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.986978888512, 'y': 7.927409254829}, {'x': 8.877603888512, 'y': 8.13020864164}, {'x': 8.736328125, 'y': 8.312500123866}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.66796875, 'y': 8.412760808365}, {'x': 8.672525763512, 'y': 8.503906139173}, {'x': 8.75, 'y': 8.585937757511}]}, {'instruction': 'LineTo', 'points': [{'x': 9.0712890625, 'y': 8.91406258964}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.162435173988, 'y': 9.018880130374}, {'x': 9.2490234375, 'y': 9.018880130374}, {'x': 9.3310546875, 'y': 8.91406258964}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.5498046875, 'y': 8.649739489076}, {'x': 9.718424201012, 'y': 8.355793950846}, {'x': 9.8369140625, 'y': 8.032226795563}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.9599609375, 'y': 7.704101963434}, {'x': 10.021484375, 'y': 7.360026082955}, {'x': 10.021484375, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.021484375, 'y': 6.448567851214}, {'x': 9.884765625, 'y': 5.94498682121}, {'x': 9.611328125, 'y': 5.48925770534}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.337890625, 'y': 5.028971322929}, {'x': 8.973307013512, 'y': 4.662109520053}, {'x': 8.517578125, 'y': 4.388671886409}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.061849236488, 'y': 4.115234252764}, {'x': 7.555989861488, 'y': 3.978515435942}, {'x': 7.0, 'y': 3.978515435942}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.444010555744, 'y': 3.978515435942}, {'x': 5.938151180744, 'y': 4.115234252764}, {'x': 5.482421875, 'y': 4.388671886409}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.026692569256, 'y': 4.662109520053}, {'x': 4.662109375, 'y': 5.028971322929}, {'x': 4.388671875, 'y': 5.48925770534}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.115234375, 'y': 5.94498682121}, {'x': 3.978515625, 'y': 6.448567851214}, {'x': 3.978515625, 'y': 6.999999974738}]}, {'instruction': 'Close'}]}}
+  Color = {'float4Val': {'x': 0.73629784884, 'y': 0.803120867751, 'z': 0.885364583333, 'w': 1.0}}
+  Opacity = ← Opacity [17891586811015698858] . Opacity
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Opacity = 0
+  Radius = 0
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 0.9
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+2541520159576166707 transition blur (builtin.layer.layer)
+  Enable = True
+  Position = {'float3Val': {'x': 0.0, 'y': -30.0, 'z': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 70.0}, 'y': {'value': 50.0}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 1.0}}
+  Clip Content = True
+  Background = {'float4Val': {'x': 0.5, 'y': 0.5, 'z': 0.5, 'w': 0.0}}
+  Opacity = ← Opacity [3407792729174577544] . Opacity
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Layout = False
+  Direction = {}
+  Alignment = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Spacing = {'spacingVec2Val': {'x': {}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Cap & Baseline = False
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+8161468061925170647 Blur Effect (private.layer.blur)
+  Enable = True
+  Blur Radius = 20.0
+  Blur Scale = {'intVal': 1}
+  Saturation = 1.0
+  Opacity = 1.0
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+3407792729174577544 Opacity (builtin.layer.binding)
+  Opacity = ← Pop Animation [17097064339979277363] . Progress
+
+10738055119464145109 airplay (builtin.layer.shape)
+  Enable = True
+  Position = {'float3Val': {'x': 0.0, 'y': -10.0, 'z': 0.0}}
+  Position Type = False
+  Size = {'dimensionVec2Val': {'x': {'value': 105.0}, 'y': {'value': 103.25685}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 1.0}}
+  Shape = {'pathVal': {'elements': [{'points': [{'x': 0.0, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.0, 'y': 7.957030871883}, {'x': 0.18001302518, 'y': 8.859375391155}, {'x': 0.5400390625, 'y': 9.70703107072}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.904622361064, 'y': 10.554687570897}, {'x': 1.4013671875, 'y': 11.292968853493}, {'x': 2.0302734375, 'y': 11.921874918509}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.121419340372, 'y': 12.017577926163}, {'x': 2.2080078125, 'y': 12.01529908774}, {'x': 2.2900390625, 'y': 11.915039223852}]}, {'instruction': 'LineTo', 'points': [{'x': 2.59765625, 'y': 11.566406487138}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.675130277872, 'y': 11.479818012565}, {'x': 2.6728515625, 'y': 11.393229537993}, {'x': 2.5908203125, 'y': 11.306640242808}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.048502534628, 'y': 10.75065126305}, {'x': 1.6201171875, 'y': 10.103515311261}, {'x': 1.3056640625, 'y': 9.365234028664}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.9912109375, 'y': 8.622395889834}, {'x': 0.833984375, 'y': 7.833984264988}, {'x': 0.833984375, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.833984375, 'y': 6.156901151408}, {'x': 0.993489548564, 'y': 5.363932260021}, {'x': 1.3125, 'y': 4.621093710884}]}, {'instruction': 'CurveTo', 'points': [{'x': 1.636067673564, 'y': 3.878255161748}, {'x': 2.080403715372, 'y': 3.224283925607}, {'x': 2.6455078125, 'y': 2.659179592156}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.215169340372, 'y': 2.089518197317}, {'x': 3.871419131756, 'y': 1.645182247797}, {'x': 4.6142578125, 'y': 1.326171846173}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.361653506756, 'y': 1.002604178007}, {'x': 6.156901180744, 'y': 0.840820292637}, {'x': 7.0, 'y': 0.840820292637}]}, {'instruction': 'CurveTo', 'points': [{'x': 7.843099236488, 'y': 0.840820292637}, {'x': 8.636067986488, 'y': 1.002604178007}, {'x': 9.37890625, 'y': 1.326171846173}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.126302361488, 'y': 1.645182247797}, {'x': 10.782552361488, 'y': 2.089518197317}, {'x': 11.34765625, 'y': 2.659179592156}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.917317986488, 'y': 3.224283925607}, {'x': 12.361653923988, 'y': 3.878255161748}, {'x': 12.6806640625, 'y': 4.621093710884}]}, {'instruction': 'CurveTo', 'points': [{'x': 13.004232048988, 'y': 5.363932260021}, {'x': 13.166015625, 'y': 6.156901151408}, {'x': 13.166015625, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 13.166015625, 'y': 7.833984264988}, {'x': 13.006510138512, 'y': 8.622395889834}, {'x': 12.6875, 'y': 9.365234028664}]}, {'instruction': 'CurveTo', 'points': [{'x': 12.373046875, 'y': 10.103515311261}, {'x': 11.946939826012, 'y': 10.75065126305}, {'x': 11.4091796875, 'y': 11.306640242808}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.3271484375, 'y': 11.393229537993}, {'x': 11.324869513512, 'y': 11.479818012565}, {'x': 11.40234375, 'y': 11.566406487138}]}, {'instruction': 'LineTo', 'points': [{'x': 11.7099609375, 'y': 11.915039223852}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.7919921875, 'y': 12.01529908774}, {'x': 11.878580451012, 'y': 12.017577926163}, {'x': 11.9697265625, 'y': 11.921874918509}]}, {'instruction': 'CurveTo', 'points': [{'x': 12.594075798988, 'y': 11.292968853493}, {'x': 13.088541388512, 'y': 10.554687570897}, {'x': 13.453125, 'y': 9.70703107072}]}, {'instruction': 'CurveTo', 'points': [{'x': 13.817708611488, 'y': 8.859375391155}, {'x': 14.0, 'y': 7.957030871883}, {'x': 14.0, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 14.0, 'y': 6.038411400747}, {'x': 13.817708611488, 'y': 5.136067702086}, {'x': 13.453125, 'y': 4.292968878755}]}, {'instruction': 'CurveTo', 'points': [{'x': 13.093099236488, 'y': 3.449869645119}, {'x': 12.591796875, 'y': 2.707031301135}, {'x': 11.94921875, 'y': 2.064453026192}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.306640625, 'y': 1.417317689862}, {'x': 10.5615234375, 'y': 0.911458334318}, {'x': 9.7138671875, 'y': 0.546875010848}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.870767951012, 'y': 0.182291661735}, {'x': 7.966146111488, 'y': 0.0}, {'x': 7.0, 'y': 0.0}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.033854305744, 'y': 0.0}, {'x': 5.126953125, 'y': 0.182291661735}, {'x': 4.279296875, 'y': 0.546875010848}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.436197847128, 'y': 0.911458334318}, {'x': 2.693359375, 'y': 1.417317689862}, {'x': 2.05078125, 'y': 2.064453026192}]}, {'instruction': 'CurveTo', 'points': [{'x': 1.408203125, 'y': 2.707031301135}, {'x': 0.904622361064, 'y': 3.449869645119}, {'x': 0.5400390625, 'y': 4.292968878755}]}, {'instruction': 'CurveTo', 'points': [{'x': 0.18001302518, 'y': 5.136067702086}, {'x': 0.0, 'y': 6.038411400747}, {'x': 0.0, 'y': 6.999999974738}]}, {'instruction': 'Close'}, {'points': [{'x': 1.9892578125, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 1.9892578125, 'y': 7.660807315842}, {'x': 2.110025972128, 'y': 8.285156524624}, {'x': 2.3515625, 'y': 8.873046780471}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.593099027872, 'y': 9.456380180083}, {'x': 2.92578125, 'y': 9.973633009708}, {'x': 3.349609375, 'y': 10.424804448732}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.436197847128, 'y': 10.520507456386}, {'x': 3.525065243244, 'y': 10.520507456386}, {'x': 3.6162109375, 'y': 10.424804448732}]}, {'instruction': 'LineTo', 'points': [{'x': 3.923828125, 'y': 10.083007406676}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.005859375, 'y': 10.005533465184}, {'x': 4.003580868244, 'y': 9.9166669728}, {'x': 3.9169921875, 'y': 9.816406288301}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.579752743244, 'y': 9.442707970156}, {'x': 3.313150972128, 'y': 9.016601291951}, {'x': 3.1171875, 'y': 8.538086253684}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.92578125, 'y': 8.055012717959}, {'x': 2.830078125, 'y': 7.542317565181}, {'x': 2.830078125, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.830078125, 'y': 6.430338374746}, {'x': 2.937174409628, 'y': 5.894856889267}, {'x': 3.1513671875, 'y': 5.393554697686}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.3701171875, 'y': 4.887695239566}, {'x': 3.6708984375, 'y': 4.443359495199}, {'x': 4.0537109375, 'y': 4.06054705428}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.4365234375, 'y': 3.677734203055}, {'x': 4.878580868244, 'y': 3.376953175321}, {'x': 5.3798828125, 'y': 3.158203150466}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.8857421875, 'y': 2.939453125611}, {'x': 6.42578125, 'y': 2.830078113184}, {'x': 7.0, 'y': 2.830078113184}]}, {'instruction': 'CurveTo', 'points': [{'x': 7.569661736488, 'y': 2.830078113184}, {'x': 8.105142951012, 'y': 2.939453125611}, {'x': 8.6064453125, 'y': 3.158203150466}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.1123046875, 'y': 3.376953175321}, {'x': 9.556640625, 'y': 3.677734203055}, {'x': 9.939453125, 'y': 4.06054705428}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.326822638512, 'y': 4.443359495199}, {'x': 10.627603888512, 'y': 4.887695239566}, {'x': 10.841796875, 'y': 5.393554697686}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.060546875, 'y': 5.894856889267}, {'x': 11.169921875, 'y': 6.430338374746}, {'x': 11.169921875, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.169921875, 'y': 7.542317565181}, {'x': 11.071939826012, 'y': 8.055012717959}, {'x': 10.8759765625, 'y': 8.538086253684}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.6845703125, 'y': 9.016601291951}, {'x': 10.420247673988, 'y': 9.440429952345}, {'x': 10.0830078125, 'y': 9.809570593643}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.0009765625, 'y': 9.905273601296}, {'x': 9.998697638512, 'y': 9.994140914292}, {'x': 10.076171875, 'y': 10.076171712019}]}, {'instruction': 'LineTo', 'points': [{'x': 10.390625, 'y': 10.424804448732}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.477213263512, 'y': 10.520507456386}, {'x': 10.563802361488, 'y': 10.520507456386}, {'x': 10.650390625, 'y': 10.424804448732}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.07421875, 'y': 9.973633009708}, {'x': 11.406900763512, 'y': 9.456380180083}, {'x': 11.6484375, 'y': 8.873046780471}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.889974236488, 'y': 8.285156524624}, {'x': 12.0107421875, 'y': 7.660807315842}, {'x': 12.0107421875, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 12.0107421875, 'y': 6.311849034391}, {'x': 11.880859375, 'y': 5.666992331331}, {'x': 11.62109375, 'y': 5.065429865557}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.361328125, 'y': 4.459309722937}, {'x': 11.001302361488, 'y': 3.926106665574}, {'x': 10.541015625, 'y': 3.465820283163}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.080728888512, 'y': 3.005533900752}, {'x': 9.547525763512, 'y': 2.645507792535}, {'x': 8.94140625, 'y': 2.385742163664}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.335286736488, 'y': 2.121419268253}, {'x': 7.688150763512, 'y': 1.989257717971}, {'x': 7.0, 'y': 1.989257717971}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.307291805744, 'y': 1.989257717971}, {'x': 5.657877743244, 'y': 2.121419268253}, {'x': 5.0517578125, 'y': 2.385742163664}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.4501953125, 'y': 2.645507792535}, {'x': 3.919270694256, 'y': 3.005533900752}, {'x': 3.458984375, 'y': 3.465820283163}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.998697847128, 'y': 3.926106665574}, {'x': 2.638671875, 'y': 4.459309722937}, {'x': 2.37890625, 'y': 5.065429865557}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.119140625, 'y': 5.666992331331}, {'x': 1.9892578125, 'y': 6.311849034391}, {'x': 1.9892578125, 'y': 6.999999974738}]}, {'instruction': 'Close'}, {'points': [{'x': 2.5771484375, 'y': 13.207031468395}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.472330659628, 'y': 13.32096354221}, {'x': 2.444986909628, 'y': 13.441732131294}, {'x': 2.4951171875, 'y': 13.569335594424}]}, {'instruction': 'CurveTo', 'points': [{'x': 2.5498046875, 'y': 13.701497555012}, {'x': 2.656900972128, 'y': 13.767578125}, {'x': 2.81640625, 'y': 13.767578125}]}, {'instruction': 'LineTo', 'points': [{'x': 11.169921875, 'y': 13.767578125}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.329427361488, 'y': 13.767578125}, {'x': 11.434244513512, 'y': 13.701497555012}, {'x': 11.484375, 'y': 13.569335594424}]}, {'instruction': 'CurveTo', 'points': [{'x': 11.5390625, 'y': 13.441732131294}, {'x': 11.516275763512, 'y': 13.32096354221}, {'x': 11.416015625, 'y': 13.207031468395}]}, {'instruction': 'LineTo', 'points': [{'x': 7.287109375, 'y': 8.538086253684}]}, {'instruction': 'CurveTo', 'points': [{'x': 7.209635138512, 'y': 8.446940102265}, {'x': 7.111653923988, 'y': 8.401367436862}, {'x': 6.9931640625, 'y': 8.401367436862}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.874674618244, 'y': 8.401367436862}, {'x': 6.776692569256, 'y': 8.446940102265}, {'x': 6.69921875, 'y': 8.538086253684}]}, {'instruction': 'LineTo', 'points': [{'x': 2.5771484375, 'y': 13.207031468395}]}, {'instruction': 'Close'}, {'points': [{'x': 3.978515625, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 3.978515625, 'y': 7.360026082955}, {'x': 4.037760555744, 'y': 7.704101963434}, {'x': 4.15625, 'y': 8.032226795563}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.279296875, 'y': 8.355793950846}, {'x': 4.4501953125, 'y': 8.649739489076}, {'x': 4.6689453125, 'y': 8.91406258964}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.7509765625, 'y': 9.014323274139}, {'x': 4.837565243244, 'y': 9.014323274139}, {'x': 4.9287109375, 'y': 8.91406258964}]}, {'instruction': 'LineTo', 'points': [{'x': 5.25, 'y': 8.579101242241}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.327473819256, 'y': 8.50162730075}, {'x': 5.33203125, 'y': 8.412760808365}, {'x': 5.263671875, 'y': 8.312500123866}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.122395694256, 'y': 8.13020864164}, {'x': 5.013020694256, 'y': 7.927409254829}, {'x': 4.935546875, 'y': 7.704101963434}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.858073055744, 'y': 7.480794672039}, {'x': 4.8193359375, 'y': 7.246094009141}, {'x': 4.8193359375, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.8193359375, 'y': 6.603515734198}, {'x': 4.917317569256, 'y': 6.241210787557}, {'x': 5.11328125, 'y': 5.913085955428}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.313801944256, 'y': 5.580403856758}, {'x': 5.578125, 'y': 5.316080756194}, {'x': 5.90625, 'y': 5.120117064042}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.238932430744, 'y': 4.919596515654}, {'x': 6.603515625, 'y': 4.819335831155}, {'x': 7.0, 'y': 4.819335831155}]}, {'instruction': 'CurveTo', 'points': [{'x': 7.396484375, 'y': 4.819335831155}, {'x': 7.7587890625, 'y': 4.919596515654}, {'x': 8.0869140625, 'y': 5.120117064042}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.419596076012, 'y': 5.316080756194}, {'x': 8.683919548988, 'y': 5.580403856758}, {'x': 8.8798828125, 'y': 5.913085955428}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.080403923988, 'y': 6.241210787557}, {'x': 9.1806640625, 'y': 6.603515734198}, {'x': 9.1806640625, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.1806640625, 'y': 7.246094009141}, {'x': 9.141927361488, 'y': 7.480794672039}, {'x': 9.064453125, 'y': 7.704101963434}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.986978888512, 'y': 7.927409254829}, {'x': 8.877603888512, 'y': 8.13020864164}, {'x': 8.736328125, 'y': 8.312500123866}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.66796875, 'y': 8.412760808365}, {'x': 8.672525763512, 'y': 8.503906139173}, {'x': 8.75, 'y': 8.585937757511}]}, {'instruction': 'LineTo', 'points': [{'x': 9.0712890625, 'y': 8.91406258964}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.162435173988, 'y': 9.018880130374}, {'x': 9.2490234375, 'y': 9.018880130374}, {'x': 9.3310546875, 'y': 8.91406258964}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.5498046875, 'y': 8.649739489076}, {'x': 9.718424201012, 'y': 8.355793950846}, {'x': 9.8369140625, 'y': 8.032226795563}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.9599609375, 'y': 7.704101963434}, {'x': 10.021484375, 'y': 7.360026082955}, {'x': 10.021484375, 'y': 6.999999974738}]}, {'instruction': 'CurveTo', 'points': [{'x': 10.021484375, 'y': 6.448567851214}, {'x': 9.884765625, 'y': 5.94498682121}, {'x': 9.611328125, 'y': 5.48925770534}]}, {'instruction': 'CurveTo', 'points': [{'x': 9.337890625, 'y': 5.028971322929}, {'x': 8.973307013512, 'y': 4.662109520053}, {'x': 8.517578125, 'y': 4.388671886409}]}, {'instruction': 'CurveTo', 'points': [{'x': 8.061849236488, 'y': 4.115234252764}, {'x': 7.555989861488, 'y': 3.978515435942}, {'x': 7.0, 'y': 3.978515435942}]}, {'instruction': 'CurveTo', 'points': [{'x': 6.444010555744, 'y': 3.978515435942}, {'x': 5.938151180744, 'y': 4.115234252764}, {'x': 5.482421875, 'y': 4.388671886409}]}, {'instruction': 'CurveTo', 'points': [{'x': 5.026692569256, 'y': 4.662109520053}, {'x': 4.662109375, 'y': 5.028971322929}, {'x': 4.388671875, 'y': 5.48925770534}]}, {'instruction': 'CurveTo', 'points': [{'x': 4.115234375, 'y': 5.94498682121}, {'x': 3.978515625, 'y': 6.448567851214}, {'x': 3.978515625, 'y': 6.999999974738}]}, {'instruction': 'Close'}]}}
+  Color = {'float4Val': {'x': 0.73629784884, 'y': 0.803120867751, 'z': 0.885364583333, 'w': 1.0}}
+  Opacity = ← Opacity [14142616249238609267] . Opacity
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Opacity = 0
+  Radius = 0
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 0.2
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+14142616249238609267 Opacity (builtin.layer.binding)
+  Opacity = ← Pop Animation [10881523926896895647] . Progress
+
+17891586811015698858 Opacity (builtin.layer.binding)
+  Opacity = ← Interaction [5783330078981079429] . Down
+
+2612699129724532749 Transition (builtin.transition)
+  Progress = ← Reverse Progress [1154454831993134371] . Progress
+  Start = ← Drag [10757729718408900694] . Position
+  End = ← Variable Receiver [10612332852379999256] . None
+
+1513337243516511026 Option Picker (builtin.multiplexer)
+  Option = ← + [12341414744274002387] . None
+  None = {'float2Val': {'x': 153.0, 'y': -33.0}}
+  None = {'float2Val': {'x': 153.0, 'y': 8.0}}
+  None = {'float2Val': {'x': 153.0, 'y': 49.0}}
+
+12249831587179628001 Interaction (builtin.layer.interaction)
+  Layer = {'unstructuredVal': {'type': 'ID', 'intVal': -5042398269507066940}}
+  Enable = True
+
+10667323977541507279 Pop Animation (builtin.bouncy)
+  Number = ← Interaction [12249831587179628001] . Down
+  Bounciness = 3.0
+  Speed = 30.0
+
+1154454831993134371 Reverse Progress (origami.reverseProgress)
+  Progress = ← Pop Animation [10667323977541507279] . Progress
+
+16288756931135977542 Pulse (builtin.pulse)
+  On / Off = ← Delay [1369365324555450878] . Value
+
+1369365324555450878 Delay (builtin.delay)
+  Value = ← Interaction [12249831587179628001] . Down
+  Duration = 0.4
+  Style = {'intVal': 2}
+
+1226382524196459051 Point Unpack (builtin.getPoint)
+  None = ← Variable Receiver [17819961937164369084] . None
+
+6630193848486158718 Greater Than (builtin.compare.gt)
+  None = ← Point Unpack [1226382524196459051] . Y
+  None = 0
+
+6720295721974508542 Greater Than (builtin.compare.gt)
+  None = ← Point Unpack [1226382524196459051] . Y
+  None = 50.0
+
+12341414744274002387 + (builtin.math.add)
+  None = ← Greater Than [6630193848486158718] . None
+  None = ← Greater Than [6720295721974508542] . None
+
+14000160295822120566 Transition (builtin.transition)
+  Progress = ← Pop Animation [14430204458343841407] . Progress
+  Start = 1.0
+  End = 1.3
+
+3119926961581977174 Scale (builtin.layer.binding)
+  Transform Scale = ← Transition [14000160295822120566] . None
+
+15875175139505808533 Option Picker (builtin.multiplexer)
+  Option = ← + [12341414744274002387] . None
+  None = {'float4Val': {'x': 0.874509803922, 'y': 0.266666666667, 'z': 0.035294117647, 'w': 1.0}}
+  None = ← HSL Color [6719901432428424187] . None
+  None = {'float4Val': {'x': 0.035294117647, 'y': 0.538512608652, 'z': 0.874509803922, 'w': 1.0}}
+
+5858015288744908774 Color (builtin.layer.binding)
+  Stroke Color = ← Transition [9605826025331062259] . None
+
+4200648230697911122 cable shadow 1 (com.lukehaddock.shapetools.AdvancedShape)
+  Enable = True
+  Position = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {}, 'y': {}}}
+  Anchor = {'float2Val': {'x': 0.5, 'y': 0.5}}
+  Shape = ← Shape [17675743903742051745] . Shape
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Opacity = 1.0
+  Layout = False
+  Direction = {}
+  Alignment = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Spacing = {'spacingVec2Val': {'x': {}, 'y': {}}}
+  Padding = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.4}}
+  Width = 3.0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = 0
+  Radius = 0
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+
+17675743903742051745 Shape (builtin.layer.binding)
+  Shape = ← Curve Shape [11890890834587958407] . Shape
+
+3549301755897673306 Pop Animation (builtin.bouncy)
+  Number = ← Option Picker [15875175139505808533] . None
+  Bounciness = 3.0
+  Speed = 30.0
+
+16501439773562437789 Transition (builtin.transition)
+  Progress = ← Pop Animation [10667323977541507279] . Progress
+  Start = 1.0
+  End = 1.3
+
+453687243217322644 Scale (builtin.layer.binding)
+  Transform Scale = ← Transition [16501439773562437789] . None
+
+16305957575585299623 Or (builtin.logic.or)
+  None = ← Variable Receiver [11767862768885889157] . None
+  None = ← Variable Receiver [7296782590646769280] . None
+
+13496823627495042703 And (builtin.logic.and)
+  None = ← Less Than [5424860049121297477] . None
+  None = ← Not [2686548624160284089] . None
+
+2686548624160284089 Not (builtin.logic.not)
+  None = ← Or [16305957575585299623] . None
+
+7368326717846067946 base (builtin.layer.video)
+  Enable = True
+  Position = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Position Type = {}
+  Size = {'dimensionVec2Val': {'x': {'value': 390.0}, 'y': {'value': 844.0}}}
+  Anchor = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Video = {'intVal': -7041478318356613377}
+  Fill Style = {}
+  Play = True
+  Opacity = 1.0
+  Radius = {'float4Val': {'x': 0.0, 'y': -10000.0, 'z': -10000.0, 'w': -10000.0}}
+  Rate = 1.0
+  Loop = 1.0
+  Scrub = False
+  Scrub Time = 0
+  Volume = 0
+  Playback = {'intVal': 1}
+  Margin = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 0.0}}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Width = 0
+  Start = 0
+  End = 1.0
+  Line Cap = {}
+  Line Join = {}
+  Position = {'intVal': 1}
+  Color = {'float4Val': {'x': 0.0, 'y': 0.0, 'z': 0.0, 'w': 1.0}}
+  Opacity = {}
+  Radius = {'intVal': 1}
+  Offset = {'float2Val': {'x': 0.0, 'y': 0.0}}
+  Scale = 1.0
+  Rotation = {'float3Val': {'x': 0.0, 'y': 0.0, 'z': 0.0}}
+  Pivot = {'float3Val': {'x': 0.5, 'y': 0.5, 'z': 0.0}}
+  Blend Mode = {}
+  Effects = {'layerEffectsVal': {}}
+
+11981258263483098623 curve toggle (builtin.switch)
+  Flip = False
+  Turn On = False
+  Turn Off = False
+
+17239926991494067465 Pop Animation (builtin.bouncy)
+  Number = ← Not [7516133897920056586] . None
+  Bounciness = 3.0
+  Speed = 30.0
+
+13133075155634587904 Transition (builtin.transition)
+  Progress = ← Pop Animation [17239926991494067465] . Progress
+  Start = 0
+  End = 0.8
+
+7516133897920056586 Not (builtin.logic.not)
+  None = ← curve toggle [11981258263483098623] . On / Off
+
+6435457478829350850 Scale (builtin.layer.binding)
+  Transform Scale = ← Transition [16501439773562437789] . None
+
+597343236132634902 Scale (builtin.layer.binding)
+  Transform Scale = ← Transition [14000160295822120566] . None
+
+9243516796257987491 button stuff (builtin.comment)
+  Size = {'float2Val': {'x': 175.0, 'y': 132.0}}
+  Color Enum = {}
+
+3767587421195629640 handle2 down (builtin.wirelessBroadcaster)
+  None = ← Interaction [12249831587179628001] . Down
+
+6217140268617324727 handle1 down (builtin.wirelessBroadcaster)
+  None = ← Interaction [17747477556908155729] . Down
+
+11767862768885889157 Variable Receiver (builtin.wirelessReceiver)
+  None = ← handle1 down [6217140268617324727] . None
+
+7296782590646769280 Variable Receiver (builtin.wirelessReceiver)
+  None = ← handle2 down [3767587421195629640] . None
+
+15730326445955484755 levels (builtin.comment)
+  Size = {'float2Val': {'x': 152.0, 'y': 44.0}}
+  Color Enum = {}
+
+13132839014014102847 handle2 pos (builtin.wirelessBroadcaster)
+  None = ← Drag [10757729718408900694] . Position
+
+17745178757026888823 handle1 pos (builtin.wirelessBroadcaster)
+  None = ← Drag [3838285558506068285] . Position
+
+17819961937164369084 Variable Receiver (builtin.wirelessReceiver)
+  None = ← handle2 pos [13132839014014102847] . None
+
+3332815197985864847 handle2 destination (builtin.wirelessBroadcaster)
+  None = ← Pop Animation [4183046002450033391] . Progress
+
+10612332852379999256 Variable Receiver (builtin.wirelessReceiver)
+  None = ← handle2 destination [3332815197985864847] . None
+
+2613013739251586938 cable color and shitty snapping behavior (builtin.comment)
+  Size = {'float2Val': {'x': 217.0, 'y': 66.0}}
+  Color Enum = {}
+
+8234554843678303768 Variable Receiver (builtin.wirelessReceiver)
+  None = ← handle1 pos [17745178757026888823] . None
+
+15946730152583373033 handle1 destination (builtin.wirelessBroadcaster)
+  None = ← Pop Animation [13569292553704560620] . Progress
+
+14575235930432607522 Variable Receiver (builtin.wirelessReceiver)
+  None = ← handle1 destination [15946730152583373033] . None
+
+4183046002450033391 Pop Animation (builtin.bouncy)
+  Number = ← Option Picker [1513337243516511026] . None
+  Bounciness = 3.0
+  Speed = 30.0
+
+8669094680104867091 handles (builtin.comment)
+  Size = {'float2Val': {'x': 213.0, 'y': 138.0}}
+  Color Enum = {}
+
+15655027050894621531 midPoint (builtin.wirelessBroadcaster)
+  None = ← ∕ [1389706592374821237] . None
+
+16378230399498452125 Variable Receiver (builtin.wirelessReceiver)
+  None = ← midPoint [15655027050894621531] . None
+
+5569057429489280776 offset midpoint by remaining cable distance (builtin.comment)
+  Size = {'float2Val': {'x': 114.0, 'y': 26.0}}
+  Color Enum = {}
+
+12344187412285497664 assemble the lines (builtin.comment)
+  Size = {'float2Val': {'x': 188.0, 'y': 56.0}}
+  Color Enum = {}
+
+15439493534531925122 panelOpen (builtin.wirelessBroadcaster)
+  None = ← Switch [5333744366919074305] . On / Off
+
+1678648863204970062 Transition (builtin.transition)
+  Progress = ← Variable Receiver [17456722833697514441] . None
+  Start = 0
+  End = 0.1
+
+17456722833697514441 Variable Receiver (builtin.wirelessReceiver)
+  None = ← panelOpen [15439493534531925122] . None
+
+17747218610672003013 Pulse (builtin.pulse)
+  On / Off = ← Or [16305957575585299623] . None
+
+17817969039145569532 Haptic (origami.haptic.ios)
+  Play = ← Pulse [17747218610672003013] . Turned Off
+  Type = {'intVal': 2}
+  File = {'unstructuredVal': {}}
+
+16234253608187080980 Haptic (origami.haptic.ios)
+  Play = ← Interaction [5783330078981079429] . Tap
+  Type = {}
+  File = {'unstructuredVal': {}}
+
+6719901432428424187 HSL Color (builtin.color.hsl)
+  Hue = ← Repeating Animation [5351328894616100755] . Progress
+  Saturation = 1.0
+  Lightness = 0.5
+  Alpha = 1.0
+
+5351328894616100755 Repeating Animation (builtin.repeatingMotion)
+  Enable = True
+  Duration = 3.0
+  Curve = {}
+  Mirrored = False
+  Reset = False

@@ -1,0 +1,5 @@
+* { box-sizing: border-box; }
+html, body, #root { min-width: 280px; min-height: 100%; margin: 0; }
+body { background: #e9e9e7; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+.scene { min-height: 100svh; display: grid; place-items: center; padding: 32px 16px; overflow: clip; }
+.panel-stage { width: min(520px, 100%); transform: translateY(12px); }

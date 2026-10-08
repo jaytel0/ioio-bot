@@ -1,0 +1,10 @@
+.rope-switcher { position: relative; width: 100%; aspect-ratio: 390 / 270; user-select: none; -webkit-user-select: none; }
+.rope-switcher > svg { display: block; width: 100%; height: 100%; overflow: visible; touch-action: none; }
+.rope-plug { cursor: grab; touch-action: none; outline: none; }
+.rope-plug[data-dragging="true"] { cursor: grabbing; }
+.rope-focus { opacity: 0; }
+.rope-plug:focus-visible .rope-focus { opacity: 1; }
+.rope-cable { pointer-events: none; }
+.rope-levels circle { transition: opacity 100ms cubic-bezier(.65,0,.35,1); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: reduce) { .rope-levels circle { transition: none; } }
