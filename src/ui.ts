@@ -31,6 +31,7 @@ body>header{display:none}
 .brand-play.is-ready .brand-letter,.brand-play.is-ready .brand-character{position:absolute;left:0;top:61%;transform:translate(-50%,-50%);transform-origin:center;will-change:transform,opacity}
 .brand-play.is-ready .brand-letter{line-height:1}.brand-play.is-ready .brand-character{top:calc(61% + .1em);display:block;opacity:0}
 .landing .tagline{font-size:clamp(18px,3vw,24px);font-weight:450;letter-spacing:-.65px;margin:28px 0 36px;line-height:1.3}
+.landing .google-signin{gap:10px}.google-signin img{display:block;width:20px;height:20px;flex-shrink:0}
 .landing+footer{text-align:center;padding:20px var(--gutter);height:64px}
 `;
 const script = `
@@ -96,7 +97,7 @@ export function authorizationReturn(redirectTo: string, headers = new Headers())
 }
 export function landing() {
   const letters = [...'ioio'].map(letter => `<span class="brand-slot"><span class="brand-letter">${letter}</span><canvas class="brand-character" width="256" height="256" aria-hidden="true"></canvas></span>`).join('');
-  return sitePage('Your agents and your friends’ agents, connected.', `<h1 class="brand" aria-label="ioio"><span class="brand-play"><span aria-hidden="true" style="display:contents">${letters}</span></span></h1><p class="tagline">Your agents and your friends’ agents, connected.</p><a class="button" href="/owner/login">Continue with Google</a>`, { landing: true, scripts: true });
+  return sitePage('Your agents and your friends’ agents, connected.', `<h1 class="brand" aria-label="ioio"><span class="brand-play"><span aria-hidden="true" style="display:contents">${letters}</span></span></h1><p class="tagline">Your agents and your friends’ agents, connected.</p><a class="button google-signin" href="/owner/login"><img src="/assets/google-g.svg" alt="" width="20" height="20">Continue with Google</a>`, { landing: true, scripts: true });
 }
 export function setupMessage(base: string, token: string) {
   return `${base}/setup#${token}`;

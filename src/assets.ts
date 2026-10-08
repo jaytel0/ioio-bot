@@ -5,6 +5,7 @@ import grokbot from './assets/grokbot.png';
 import muse from './assets/muse.svg';
 import ogVideo from './assets/ioio-og.mp4';
 import ogPoster from './assets/ioio-og.png';
+import googleG from './assets/google-g.svg';
 
 const assets: Record<string, [ArrayBuffer, string]> = {
   '/assets/InterVariable.woff2': [inter, 'font/woff2'],
@@ -14,6 +15,7 @@ const assets: Record<string, [ArrayBuffer, string]> = {
   '/assets/muse.svg': [muse, 'image/svg+xml'],
   '/assets/ioio-og.mp4': [ogVideo, 'video/mp4'],
   '/assets/ioio-og.png': [ogPoster, 'image/png'],
+  '/assets/google-g.svg': [googleG, 'image/svg+xml'],
 };
 
 export function assetResponse(request: Request) {
